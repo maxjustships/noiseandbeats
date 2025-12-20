@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume, isZen, timerRemaining } from '../store';
 import { audio } from '../lib/AudioEngine';
+import { savePreset, loadPreset } from '../lib/presets';
 import type { NoiseColor, BeatType } from '../lib/types';
-import { Volume2, Activity, Zap, Music } from 'lucide-react';
+import { Volume2, Activity, Zap, Music, Save } from 'lucide-react';
 
 const COLORS: NoiseColor[] = ['brown', 'red', 'pink', 'white', 'green', 'blue', 'black', 'off'];
 const BEATS: BeatType[] = ['pulse', 'kick', 'binaural', 'off'];
@@ -48,6 +49,26 @@ export default function ZenPlayer() {
   // Keyboard Handlers
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement) return;
+
+    // Handle Number Keys for Presets
+    if (e.key >= '0' && e.key <= '9') {
+        const id = parseInt(e.key);
+        if (e.ctrlKey) {
+            e.preventDefault();
+            if (savePreset(id)) {
+                toast(`Saved Preset ${id}`);
+            } else {
+                toast("Error Saving");
+            }
+        } else {
+            if (loadPreset(id)) {
+                toast(`Loaded Preset ${id}`);
+            } else {
+                toast(`Preset ${id} Empty`);
+            }
+        }
+        return;
+    }
 
     switch (e.key) {
       case ' ':
@@ -164,14 +185,6 @@ export default function ZenPlayer() {
       case '?':
           setShowHelp(prev => !prev);
           break;
-        
-      // Numbers for Colors (Legacy support)
-      case '1': noiseColor.set('brown'); toast("Brown"); break;
-      case '2': noiseColor.set('pink'); toast("Pink"); break;
-      case '3': noiseColor.set('white'); toast("White"); break;
-      case '4': noiseColor.set('green'); toast("Green"); break;
-      case '5': noiseColor.set('blue'); toast("Blue"); break;
-      case '6': noiseColor.set('black'); toast("Black"); break;
     }
   }, [showControls]);
 
@@ -222,8 +235,8 @@ export default function ZenPlayer() {
 
       {/* Controls HUD */}
       {showControls && (
-        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-4xl px-8 transition-opacity duration-500 ${$isPlaying ? 'opacity-100' : 'opacity-100'}`}>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 text-center">
+        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-5xl px-8 transition-opacity duration-500 ${$isPlaying ? 'opacity-100' : 'opacity-100'}`}>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-8 text-center">
              
              {/* BPM */}
              <div className="space-y-2">
@@ -270,6 +283,15 @@ export default function ZenPlayer() {
                 <div className="text-[10px] text-zinc-600">Y / O</div>
              </div>
 
+             {/* Presets */}
+             <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+                    <Save size={12} /> Presets
+                </div>
+                <div className="text-xl font-light text-zinc-300">1-9</div>
+                <div className="text-[10px] text-zinc-600">CTRL+N Save</div>
+             </div>
+
           </div>
           
           <div className="mt-8 text-center">
@@ -307,6 +329,8 @@ export default function ZenPlayer() {
                       <div>U / I</div><div className="text-right">Prev / Next Beat</div>
                       <div>Y / O</div><div className="text-right">Beat Vol - / +</div>
                       <div>[ / ]</div><div className="text-right">BPM - / +</div>
+                      <div>0 - 9</div><div className="text-right">Load Preset</div>
+                      <div>Ctrl + 0-9</div><div className="text-right">Save Preset</div>
                       <div>T</div><div className="text-right">Cycle Timer</div>
                       <div>ESC</div><div className="text-right">Zen Mode</div>
                   </div>
