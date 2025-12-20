@@ -119,15 +119,30 @@ export default function ZenPlayer() {
          toast(`Noise: ${nextNoise}`);
          break;
       
-      case 'T': // Timer
-          const mins = parseInt(prompt("Set Timer (minutes):") || "0");
-          if (mins > 0) {
-              timerRemaining.set(mins * 60);
-              toast(`Timer: ${mins}m`);
+      case 'T': // Cycle Timer
+          const currentT = timerRemaining.get();
+          let nextT: number | null = null;
+          let msg = "Timer Off";
+
+          if (currentT === null) {
+              nextT = 15 * 60;
+              msg = "Timer: 15m";
+          } else if (currentT <= 15 * 60) {
+              nextT = 25 * 60;
+              msg = "Timer: 25m";
+          } else if (currentT <= 25 * 60) {
+              nextT = 45 * 60;
+              msg = "Timer: 45m";
+          } else if (currentT <= 45 * 60) {
+              nextT = 60 * 60;
+              msg = "Timer: 60m";
           } else {
-              timerRemaining.set(null);
-              toast("Timer Off");
+              nextT = null;
+              msg = "Timer Off";
           }
+          
+          timerRemaining.set(nextT);
+          toast(msg);
           break;
       
       case '?':
@@ -267,7 +282,7 @@ export default function ZenPlayer() {
                       <div>N</div><div className="text-right">Next Noise</div>
                       <div>B</div><div className="text-right">Next Beat</div>
                       <div>1 - 6</div><div className="text-right">Noise Profiles</div>
-                      <div>T</div><div className="text-right">Set Timer</div>
+                      <div>T</div><div className="text-right">Cycle Timer</div>
                       <div>ESC</div><div className="text-right">Zen Mode</div>
                   </div>
                   <button 

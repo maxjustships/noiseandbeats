@@ -16,8 +16,7 @@ export class AudioEngine {
   private scheduleAheadTime = 0.1; // s
 
   // Binaural/Beat state
-  private beatOscillators: OscillatorNode[] = [];
-  private beatGain: GainNode | null = null;
+  // (State is handled per note in scheduler)
 
   constructor() {
     // We init context lazily on user interaction
