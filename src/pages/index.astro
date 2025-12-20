@@ -9,8 +9,21 @@ import '../styles/global.css';
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-        <title>Noises & Beats</title>
-        <meta name="description" content="Minimalist productivity audio tool." />
+        
+        <title>Noises & Beats | Minimalist Focus Audio</title>
+        <meta name="description" content="A minimalist audio tool for productivity and focus. Generate brown noise, pink noise, and binaural beats directly in your browser. Keyboard driven, no ads, no distractions." />
+        
+        <!-- Open Graph / Facebook -->
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Noises & Beats | Minimalist Focus Audio" />
+        <meta property="og:description" content="Generate brown noise, pink noise, and binaural beats for deep work and focus." />
+        
+        <!-- Twitter -->
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:title" content="Noises & Beats | Minimalist Focus Audio" />
+        <meta property="twitter:description" content="Generate brown noise, pink noise, and binaural beats for deep work and focus." />
+
+        <meta name="theme-color" content="#000000" />
 	</head>
 	<body class="bg-black overflow-hidden">
 		<ZenPlayer client:load />

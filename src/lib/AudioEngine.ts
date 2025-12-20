@@ -1,4 +1,4 @@
-import { isPlaying, bpm, noiseColor, beatType, volume } from '../store';
+import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume } from '../store';
 import type { NoiseColor, BeatType } from './types';
 
 export class AudioEngine {
@@ -15,9 +15,6 @@ export class AudioEngine {
   private lookahead = 25.0; // ms
   private scheduleAheadTime = 0.1; // s
 
-  // Binaural/Beat state
-  // (State is handled per note in scheduler)
-
   constructor() {
     // We init context lazily on user interaction
   }
@@ -28,18 +25,20 @@ export class AudioEngine {
       this.ctx = new AudioContextClass();
       
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = volume.get();
+      this.masterGain.gain.value = 1.0;
       this.masterGain.connect(this.ctx.destination);
 
-      // Subscribe to stores to update real-time
-      volume.subscribe(v => {
-        if (this.masterGain) {
-          this.masterGain.gain.setTargetAtTime(v, this.ctx!.currentTime, 0.1);
+      // Subscribe to stores
+      noiseVolume.subscribe(() => {
+        if (this.ctx && this.noiseGain && isPlaying.get()) {
+           // Smooth transition for volume changes
+           const target = noiseVolume.get() * 0.5; // Scale down a bit as raw noise is loud
+           this.noiseGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.1);
         }
       });
-
+      
       noiseColor.subscribe(() => this.updateNoise());
-      // bpm and beatType are checked in the scheduler loop
+      // beatVolume is read per beat
     }
   }
 
@@ -73,11 +72,6 @@ export class AudioEngine {
   private updateNoise() {
     if (!this.ctx || !isPlaying.get()) return;
     
-    // If noise is playing, we might need to change filter
-    // Simplest: stop and restart or just update filter params if node exists
-    // Since we change filter types, it's safer to re-create the graph or reuse the source if possible.
-    // Let's just update the filter node params if possible, or swap it.
-    
     const color = noiseColor.get();
     
     if (color === 'off') {
@@ -91,10 +85,11 @@ export class AudioEngine {
       return; 
     }
 
-    // Update Filter
+    // Update Filter & Volume
     if (this.noiseFilter && this.noiseGain) {
-      // Ramp gain up
-      this.noiseGain.gain.setTargetAtTime(0.5, this.ctx.currentTime, 0.5);
+      // Set volume based on store
+      const targetVol = noiseVolume.get() * 0.5;
+      this.noiseGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.5);
 
       const t = this.ctx.currentTime;
       switch (color) {
@@ -102,24 +97,22 @@ export class AudioEngine {
           this.noiseFilter.type = 'lowpass';
           this.noiseFilter.frequency.setTargetAtTime(150, t, 0.2);
           break;
-        case 'red': // slightly brighter brown
+        case 'red': 
           this.noiseFilter.type = 'lowpass';
           this.noiseFilter.frequency.setTargetAtTime(350, t, 0.2);
           break;
         case 'white':
-          this.noiseFilter.type = 'allpass'; // No filtering
+          this.noiseFilter.type = 'allpass'; 
           break;
         case 'pink':
-          // Approx with lowpass + low Q? Or just a specific lowpass
           this.noiseFilter.type = 'lowpass';
           this.noiseFilter.frequency.setTargetAtTime(600, t, 0.2); 
-          // True pink is hard with one biquad, but this is "productivity pink"
           break;
         case 'blue':
           this.noiseFilter.type = 'highpass';
           this.noiseFilter.frequency.setTargetAtTime(800, t, 0.2);
           break;
-        case 'green': // Nature-like
+        case 'green': 
           this.noiseFilter.type = 'bandpass';
           this.noiseFilter.frequency.setTargetAtTime(1000, t, 0.2);
           this.noiseFilter.Q.value = 0.5;
@@ -134,7 +127,6 @@ export class AudioEngine {
 
   private startNoise() {
     if (!this.ctx) return;
-    // Stop existing
     this.stopNoise();
 
     const color = noiseColor.get();
@@ -146,14 +138,16 @@ export class AudioEngine {
 
     this.noiseFilter = this.ctx.createBiquadFilter();
     this.noiseGain = this.ctx.createGain();
-    this.noiseGain.gain.value = 0.05; // start low
+    
+    // Initial silent start, let updateNoise ramp it up
+    this.noiseGain.gain.value = 0; 
 
     this.noiseNode.connect(this.noiseFilter);
     this.noiseFilter.connect(this.noiseGain);
     this.noiseGain.connect(this.masterGain!);
 
     this.noiseNode.start();
-    this.updateNoise(); // Apply initial filter
+    this.updateNoise(); 
   }
 
   private stopNoise() {
@@ -204,7 +198,8 @@ export class AudioEngine {
     const type = beatType.get();
     if (type === 'off') return;
 
-    // Create Oscillators for the beat
+    const bVol = beatVolume.get();
+
     if (type === 'kick') {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -215,7 +210,8 @@ export class AudioEngine {
       osc.frequency.setValueAtTime(150, time);
       osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
       
-      gain.gain.setValueAtTime(0.8, time);
+      // Peak gain scaled by beatVolume
+      gain.gain.setValueAtTime(0.8 * bVol, time);
       gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
 
       osc.start(time);
@@ -228,19 +224,17 @@ export class AudioEngine {
       gain.connect(this.masterGain);
 
       osc.type = 'sine';
-      osc.frequency.value = 60; // low throb
+      osc.frequency.value = 60; 
 
-      // Swell in and out
       gain.gain.setValueAtTime(0, time);
-      gain.gain.linearRampToValueAtTime(0.6, time + 0.1);
+      gain.gain.linearRampToValueAtTime(0.6 * bVol, time + 0.1);
       gain.gain.linearRampToValueAtTime(0, time + 0.4);
 
       osc.start(time);
       osc.stop(time + 0.5);
     } else if (type === 'binaural') {
-      // 200Hz base, Delta related to State? Let's assume Alpha (10Hz difference)
       const baseFreq = 200;
-      const beatFreq = 10; // 10Hz alpha wave
+      const beatFreq = 10; 
 
       const oscL = this.ctx.createOscillator();
       const oscR = this.ctx.createOscillator();
@@ -262,16 +256,13 @@ export class AudioEngine {
       oscL.frequency.value = baseFreq;
       oscR.frequency.value = baseFreq + beatFreq;
 
-      // Pulse the volume slightly to emphasize rhythm
-      gain.gain.setValueAtTime(0.1, time);
-      gain.gain.linearRampToValueAtTime(0.3, time + 0.1);
-      gain.gain.linearRampToValueAtTime(0.1, time + 0.5);
+      gain.gain.setValueAtTime(0.1 * bVol, time);
+      gain.gain.linearRampToValueAtTime(0.3 * bVol, time + 0.1);
+      gain.gain.linearRampToValueAtTime(0.1 * bVol, time + 0.5);
 
       oscL.start(time);
-      oscR.start(time + 0.6); // slight overlap? no, just pulse
+      oscR.start(time + 0.6); 
       
-      // Actually binaural is usually continuous, but user asked for "Beat".
-      // Let's make it a rhythmic pulse of binaural tone.
       oscL.stop(time + 0.5);
       oscR.stop(time + 0.5);
     }

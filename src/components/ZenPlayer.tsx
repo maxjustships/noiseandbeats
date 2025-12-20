@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
-import { isPlaying, bpm, noiseColor, beatType, volume, isZen, timerRemaining } from '../store';
+import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume, isZen, timerRemaining } from '../store';
 import { audio } from '../lib/AudioEngine';
 import type { NoiseColor, BeatType } from '../lib/types';
-import { Volume2, Activity, Zap } from 'lucide-react';
+import { Volume2, Activity, Zap, Music } from 'lucide-react';
 
 const COLORS: NoiseColor[] = ['brown', 'red', 'pink', 'white', 'green', 'blue', 'black', 'off'];
 const BEATS: BeatType[] = ['pulse', 'kick', 'binaural', 'off'];
@@ -13,7 +13,8 @@ export default function ZenPlayer() {
   const $bpm = useStore(bpm);
   const $noiseColor = useStore(noiseColor);
   const $beatType = useStore(beatType);
-  const $volume = useStore(volume);
+  const $noiseVolume = useStore(noiseVolume);
+  const $beatVolume = useStore(beatVolume);
   const $isZen = useStore(isZen);
   const $timer = useStore(timerRemaining);
 
@@ -46,7 +47,6 @@ export default function ZenPlayer() {
 
   // Keyboard Handlers
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Ignore if typing in an input (if we had one)
     if (e.target instanceof HTMLInputElement) return;
 
     switch (e.key) {
@@ -71,54 +71,70 @@ export default function ZenPlayer() {
         }
         break;
 
-      case 'K': // Shift+K handled by event.key if simple 'K' matches? No 'K' is shift+k usually or just 'k'
-      case 'k':
-         if (e.shiftKey) {
-             // Toggle HUD
-             const vis = !showControls;
-             setShowControls(vis);
-             isZen.set(!vis);
-             toast(vis ? "HUD On" : "HUD Off");
-         } else {
-             // BPM Up
-             const newBpm = Math.min(220, bpm.get() + 5);
-             bpm.set(newBpm);
-             toast(`BPM: ${newBpm}`);
-         }
+      // BPM
+      case ']':
+         const newBpm = Math.min(220, bpm.get() + 5);
+         bpm.set(newBpm);
+         toast(`BPM: ${newBpm}`);
          break;
-      
-      case 'j':
+      case '[':
          const newBpmDown = Math.max(30, bpm.get() - 5);
          bpm.set(newBpmDown);
          toast(`BPM: ${newBpmDown}`);
          break;
 
-      case 'h': // Volume Down
-         const vDown = Math.max(0, parseFloat((volume.get() - 0.05).toFixed(2)));
-         volume.set(vDown);
-         toast(`Vol: ${Math.round(vDown * 100)}%`);
-         break;
-
-      case 'l': // Volume Up
-         const vUp = Math.min(1, parseFloat((volume.get() + 0.05).toFixed(2)));
-         volume.set(vUp);
-         toast(`Vol: ${Math.round(vUp * 100)}%`);
-         break;
-
-      case 'b': // Cycle Beat
-         const currentBeatIdx = BEATS.indexOf(beatType.get());
-         const nextBeat = BEATS[(currentBeatIdx + 1) % BEATS.length];
-         beatType.set(nextBeat);
-         toast(`Beat: ${nextBeat}`);
-         break;
-
-      case 'n': // Cycle Noise (Forward)
+      // Noise Selection
+      case 'k': // Next Noise
          const currentNoiseIdx = COLORS.indexOf(noiseColor.get());
          const nextNoise = COLORS[(currentNoiseIdx + 1) % COLORS.length];
          noiseColor.set(nextNoise);
          toast(`Noise: ${nextNoise}`);
          break;
-      
+      case 'j': // Prev Noise
+         const cIdx = COLORS.indexOf(noiseColor.get());
+         const prevNoise = COLORS[(cIdx - 1 + COLORS.length) % COLORS.length];
+         noiseColor.set(prevNoise);
+         toast(`Noise: ${prevNoise}`);
+         break;
+
+      // Noise Volume
+      case 'h': // Vol Down
+         const nvDown = Math.max(0, parseFloat((noiseVolume.get() - 0.05).toFixed(2)));
+         noiseVolume.set(nvDown);
+         toast(`Noise Vol: ${Math.round(nvDown * 100)}%`);
+         break;
+      case 'l': // Vol Up
+         const nvUp = Math.min(1, parseFloat((noiseVolume.get() + 0.05).toFixed(2)));
+         noiseVolume.set(nvUp);
+         toast(`Noise Vol: ${Math.round(nvUp * 100)}%`);
+         break;
+
+      // Beat Selection
+      case 'i': // Next Beat
+         const bIdx = BEATS.indexOf(beatType.get());
+         const nextBeat = BEATS[(bIdx + 1) % BEATS.length];
+         beatType.set(nextBeat);
+         toast(`Beat: ${nextBeat}`);
+         break;
+      case 'u': // Prev Beat
+         const cbIdx = BEATS.indexOf(beatType.get());
+         const prevBeat = BEATS[(cbIdx - 1 + BEATS.length) % BEATS.length];
+         beatType.set(prevBeat);
+         toast(`Beat: ${prevBeat}`);
+         break;
+
+      // Beat Volume
+      case 'y': // Vol Down
+         const bvDown = Math.max(0, parseFloat((beatVolume.get() - 0.05).toFixed(2)));
+         beatVolume.set(bvDown);
+         toast(`Beat Vol: ${Math.round(bvDown * 100)}%`);
+         break;
+      case 'o': // Vol Up
+         const bvUp = Math.min(1, parseFloat((beatVolume.get() + 0.05).toFixed(2)));
+         beatVolume.set(bvUp);
+         toast(`Beat Vol: ${Math.round(bvUp * 100)}%`);
+         break;
+
       case 'T': // Cycle Timer
           const currentT = timerRemaining.get();
           let nextT: number | null = null;
@@ -149,7 +165,7 @@ export default function ZenPlayer() {
           setShowHelp(prev => !prev);
           break;
         
-      // Numbers for Colors
+      // Numbers for Colors (Legacy support)
       case '1': noiseColor.set('brown'); toast("Brown"); break;
       case '2': noiseColor.set('pink'); toast("Pink"); break;
       case '3': noiseColor.set('white'); toast("White"); break;
@@ -197,7 +213,7 @@ export default function ZenPlayer() {
         </div>
       )}
 
-      {/* Timer Display (Always visible if active, but subtle) */}
+      {/* Timer Display */}
       {$timer !== null && (
          <div className="absolute top-8 font-mono text-sm tracking-widest text-zinc-500">
             {formatTime($timer)}
@@ -206,43 +222,52 @@ export default function ZenPlayer() {
 
       {/* Controls HUD */}
       {showControls && (
-        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-2xl px-8 transition-opacity duration-500 ${$isPlaying ? 'opacity-100' : 'opacity-100'}`}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-4xl px-8 transition-opacity duration-500 ${$isPlaying ? 'opacity-100' : 'opacity-100'}`}>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 text-center">
              
              {/* BPM */}
              <div className="space-y-2">
                 <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
                     <Activity size={12} /> BPM
                 </div>
-                <div className="text-2xl font-light text-zinc-300">{$bpm}</div>
-                <div className="text-[10px] text-zinc-600">J / K</div>
+                <div className="text-xl font-light text-zinc-300">{$bpm}</div>
+                <div className="text-[10px] text-zinc-600">[ / ]</div>
              </div>
 
-             {/* Color */}
+             {/* Noise Color */}
              <div className="space-y-2">
                 <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
                     <Zap size={12} /> Noise
                 </div>
-                <div className="text-2xl font-light text-zinc-300 capitalize">{$noiseColor}</div>
-                <div className="text-[10px] text-zinc-600">1-6 / N</div>
+                <div className="text-xl font-light text-zinc-300 capitalize">{$noiseColor}</div>
+                <div className="text-[10px] text-zinc-600">J / K</div>
              </div>
 
-             {/* Beat */}
+             {/* Noise Vol */}
              <div className="space-y-2">
                 <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-                    <Activity size={12} /> Beat
+                    <Volume2 size={12} /> N. Vol
                 </div>
-                <div className="text-2xl font-light text-zinc-300 capitalize">{$beatType}</div>
-                <div className="text-[10px] text-zinc-600">B</div>
-             </div>
-
-             {/* Volume */}
-             <div className="space-y-2">
-                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-                    <Volume2 size={12} /> Vol
-                </div>
-                <div className="text-2xl font-light text-zinc-300">{Math.round($volume * 100)}%</div>
+                <div className="text-xl font-light text-zinc-300">{Math.round($noiseVolume * 100)}%</div>
                 <div className="text-[10px] text-zinc-600">H / L</div>
+             </div>
+
+             {/* Beat Type */}
+             <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+                    <Music size={12} /> Beat
+                </div>
+                <div className="text-xl font-light text-zinc-300 capitalize">{$beatType}</div>
+                <div className="text-[10px] text-zinc-600">U / I</div>
+             </div>
+
+             {/* Beat Vol */}
+             <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+                    <Volume2 size={12} /> B. Vol
+                </div>
+                <div className="text-xl font-light text-zinc-300">{Math.round($beatVolume * 100)}%</div>
+                <div className="text-[10px] text-zinc-600">Y / O</div>
              </div>
 
           </div>
@@ -263,8 +288,8 @@ export default function ZenPlayer() {
 
       {/* Toast Notification */}
       {showToast && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50">
-             <div className="bg-zinc-800 text-zinc-200 px-6 py-3 rounded-full text-sm tracking-widest shadow-2xl animate-pulse">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
+             <div className="bg-zinc-800 text-zinc-200 px-6 py-3 rounded-full text-sm tracking-widest shadow-2xl animate-pulse border border-zinc-700">
                 {showToast}
              </div>
           </div>
@@ -272,16 +297,16 @@ export default function ZenPlayer() {
 
       {/* Help Modal */}
       {showHelp && (
-          <div className="absolute inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-              <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-md w-full rounded-sm shadow-2xl">
+          <div className="absolute inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
+              <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-lg w-full rounded-sm shadow-2xl">
                   <h2 className="text-xl font-light text-white mb-6 tracking-widest border-b border-zinc-800 pb-4">CONTROLS</h2>
                   <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm text-zinc-400">
                       <div>SPACE</div><div className="text-right">Play / Pause</div>
-                      <div>J / K</div><div className="text-right">BPM - / +</div>
-                      <div>H / L</div><div className="text-right">Volume - / +</div>
-                      <div>N</div><div className="text-right">Next Noise</div>
-                      <div>B</div><div className="text-right">Next Beat</div>
-                      <div>1 - 6</div><div className="text-right">Noise Profiles</div>
+                      <div>J / K</div><div className="text-right">Prev / Next Noise</div>
+                      <div>H / L</div><div className="text-right">Noise Vol - / +</div>
+                      <div>U / I</div><div className="text-right">Prev / Next Beat</div>
+                      <div>Y / O</div><div className="text-right">Beat Vol - / +</div>
+                      <div>[ / ]</div><div className="text-right">BPM - / +</div>
                       <div>T</div><div className="text-right">Cycle Timer</div>
                       <div>ESC</div><div className="text-right">Zen Mode</div>
                   </div>
