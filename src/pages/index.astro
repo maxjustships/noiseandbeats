@@ -1,0 +1,18 @@
+---
+import ZenPlayer from '../components/ZenPlayer';
+import '../styles/global.css';
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+        <title>Noises & Beats</title>
+        <meta name="description" content="Minimalist productivity audio tool." />
+	</head>
+	<body class="bg-black overflow-hidden">
+		<ZenPlayer client:load />
+	</body>
+</html>

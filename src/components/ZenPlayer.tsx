@@ -1,0 +1,284 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { useStore } from '@nanostores/react';
+import { isPlaying, bpm, noiseColor, beatType, volume, isZen, timerRemaining } from '../store';
+import { audio } from '../lib/AudioEngine';
+import type { NoiseColor, BeatType } from '../lib/types';
+import { Volume2, Activity, Zap } from 'lucide-react';
+
+const COLORS: NoiseColor[] = ['brown', 'red', 'pink', 'white', 'green', 'blue', 'black', 'off'];
+const BEATS: BeatType[] = ['pulse', 'kick', 'binaural', 'off'];
+
+export default function ZenPlayer() {
+  const $isPlaying = useStore(isPlaying);
+  const $bpm = useStore(bpm);
+  const $noiseColor = useStore(noiseColor);
+  const $beatType = useStore(beatType);
+  const $volume = useStore(volume);
+  const $isZen = useStore(isZen);
+  const $timer = useStore(timerRemaining);
+
+  const [showToast, setShowToast] = useState<string | null>(null);
+  const [showControls, setShowControls] = useState(true); // HUD visibility
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Toast helper
+  const toast = (msg: string) => {
+    setShowToast(msg);
+    setTimeout(() => setShowToast(null), 2000);
+  };
+
+  // Timer Tick
+  useEffect(() => {
+    let interval: number;
+    if ($isPlaying && $timer !== null && $timer > 0) {
+      interval = window.setInterval(() => {
+        timerRemaining.set($timer - 1);
+      }, 1000);
+    } else if ($timer === 0) {
+      // Timer finished
+      isPlaying.set(false);
+      audio.togglePlay(false);
+      timerRemaining.set(null);
+      toast("Session Complete");
+    }
+    return () => clearInterval(interval);
+  }, [$isPlaying, $timer]);
+
+  // Keyboard Handlers
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Ignore if typing in an input (if we had one)
+    if (e.target instanceof HTMLInputElement) return;
+
+    switch (e.key) {
+      case ' ':
+        e.preventDefault();
+        const newState = !isPlaying.get();
+        isPlaying.set(newState);
+        audio.togglePlay(newState);
+        toast(newState ? "Focus" : "Paused");
+        break;
+      
+      case 'Escape':
+        setShowHelp(false);
+        if (showControls) {
+          isZen.set(true);
+          setShowControls(false);
+          toast("Zen Mode");
+        } else {
+          isZen.set(false);
+          setShowControls(true);
+          toast("Controls Visible");
+        }
+        break;
+
+      case 'K': // Shift+K handled by event.key if simple 'K' matches? No 'K' is shift+k usually or just 'k'
+      case 'k':
+         if (e.shiftKey) {
+             // Toggle HUD
+             const vis = !showControls;
+             setShowControls(vis);
+             isZen.set(!vis);
+             toast(vis ? "HUD On" : "HUD Off");
+         } else {
+             // BPM Up
+             const newBpm = Math.min(220, bpm.get() + 5);
+             bpm.set(newBpm);
+             toast(`BPM: ${newBpm}`);
+         }
+         break;
+      
+      case 'j':
+         const newBpmDown = Math.max(30, bpm.get() - 5);
+         bpm.set(newBpmDown);
+         toast(`BPM: ${newBpmDown}`);
+         break;
+
+      case 'h': // Volume Down
+         const vDown = Math.max(0, parseFloat((volume.get() - 0.05).toFixed(2)));
+         volume.set(vDown);
+         toast(`Vol: ${Math.round(vDown * 100)}%`);
+         break;
+
+      case 'l': // Volume Up
+         const vUp = Math.min(1, parseFloat((volume.get() + 0.05).toFixed(2)));
+         volume.set(vUp);
+         toast(`Vol: ${Math.round(vUp * 100)}%`);
+         break;
+
+      case 'b': // Cycle Beat
+         const currentBeatIdx = BEATS.indexOf(beatType.get());
+         const nextBeat = BEATS[(currentBeatIdx + 1) % BEATS.length];
+         beatType.set(nextBeat);
+         toast(`Beat: ${nextBeat}`);
+         break;
+
+      case 'n': // Cycle Noise (Forward)
+         const currentNoiseIdx = COLORS.indexOf(noiseColor.get());
+         const nextNoise = COLORS[(currentNoiseIdx + 1) % COLORS.length];
+         noiseColor.set(nextNoise);
+         toast(`Noise: ${nextNoise}`);
+         break;
+      
+      case 'T': // Timer
+          const mins = parseInt(prompt("Set Timer (minutes):") || "0");
+          if (mins > 0) {
+              timerRemaining.set(mins * 60);
+              toast(`Timer: ${mins}m`);
+          } else {
+              timerRemaining.set(null);
+              toast("Timer Off");
+          }
+          break;
+      
+      case '?':
+          setShowHelp(prev => !prev);
+          break;
+        
+      // Numbers for Colors
+      case '1': noiseColor.set('brown'); toast("Brown"); break;
+      case '2': noiseColor.set('pink'); toast("Pink"); break;
+      case '3': noiseColor.set('white'); toast("White"); break;
+      case '4': noiseColor.set('green'); toast("Green"); break;
+      case '5': noiseColor.set('blue'); toast("Blue"); break;
+      case '6': noiseColor.set('black'); toast("Black"); break;
+    }
+  }, [showControls]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+
+  // Format timer
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className={`min-h-screen w-full flex flex-col items-center justify-center transition-colors duration-1000 ${$isPlaying ? 'bg-black text-slate-300' : 'bg-zinc-900 text-slate-400'}`}>
+      
+      {/* Zen Breathing Visual */}
+      {$isPlaying && (
+        <div 
+            className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden"
+        >
+            <div className={`w-64 h-64 rounded-full bg-gradient-to-tr from-slate-800 to-transparent blur-3xl opacity-20 animate-breathe`} 
+                 style={{ animationDuration: `${60/$bpm * 4}s` }}
+            />
+        </div>
+      )}
+
+      {/* Main Status / Prompt */}
+      {!$isPlaying && (
+        <div className="z-10 text-center space-y-4 animate-fade-in">
+           <h1 className="text-4xl font-light tracking-[0.2em] text-white">FOCUS</h1>
+           <p className="text-sm tracking-widest text-zinc-500">PRESS SPACE</p>
+           <button onClick={() => setShowHelp(true)} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+             ? for controls
+           </button>
+        </div>
+      )}
+
+      {/* Timer Display (Always visible if active, but subtle) */}
+      {$timer !== null && (
+         <div className="absolute top-8 font-mono text-sm tracking-widest text-zinc-500">
+            {formatTime($timer)}
+         </div>
+      )}
+
+      {/* Controls HUD */}
+      {showControls && (
+        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-2xl px-8 transition-opacity duration-500 ${$isPlaying ? 'opacity-100' : 'opacity-100'}`}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+             
+             {/* BPM */}
+             <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+                    <Activity size={12} /> BPM
+                </div>
+                <div className="text-2xl font-light text-zinc-300">{$bpm}</div>
+                <div className="text-[10px] text-zinc-600">J / K</div>
+             </div>
+
+             {/* Color */}
+             <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+                    <Zap size={12} /> Noise
+                </div>
+                <div className="text-2xl font-light text-zinc-300 capitalize">{$noiseColor}</div>
+                <div className="text-[10px] text-zinc-600">1-6 / N</div>
+             </div>
+
+             {/* Beat */}
+             <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+                    <Activity size={12} /> Beat
+                </div>
+                <div className="text-2xl font-light text-zinc-300 capitalize">{$beatType}</div>
+                <div className="text-[10px] text-zinc-600">B</div>
+             </div>
+
+             {/* Volume */}
+             <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+                    <Volume2 size={12} /> Vol
+                </div>
+                <div className="text-2xl font-light text-zinc-300">{Math.round($volume * 100)}%</div>
+                <div className="text-[10px] text-zinc-600">H / L</div>
+             </div>
+
+          </div>
+          
+          <div className="mt-8 text-center">
+             <button 
+                onClick={() => {
+                    setShowControls(false);
+                    isZen.set(true);
+                }}
+                className="text-xs tracking-widest text-zinc-600 hover:text-white transition-colors uppercase"
+             >
+                Enter Zen Mode (Esc)
+             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {showToast && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50">
+             <div className="bg-zinc-800 text-zinc-200 px-6 py-3 rounded-full text-sm tracking-widest shadow-2xl animate-pulse">
+                {showToast}
+             </div>
+          </div>
+      )}
+
+      {/* Help Modal */}
+      {showHelp && (
+          <div className="absolute inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+              <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-md w-full rounded-sm shadow-2xl">
+                  <h2 className="text-xl font-light text-white mb-6 tracking-widest border-b border-zinc-800 pb-4">CONTROLS</h2>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm text-zinc-400">
+                      <div>SPACE</div><div className="text-right">Play / Pause</div>
+                      <div>J / K</div><div className="text-right">BPM - / +</div>
+                      <div>H / L</div><div className="text-right">Volume - / +</div>
+                      <div>N</div><div className="text-right">Next Noise</div>
+                      <div>B</div><div className="text-right">Next Beat</div>
+                      <div>1 - 6</div><div className="text-right">Noise Profiles</div>
+                      <div>T</div><div className="text-right">Set Timer</div>
+                      <div>ESC</div><div className="text-right">Zen Mode</div>
+                  </div>
+                  <button 
+                    onClick={() => setShowHelp(false)}
+                    className="w-full mt-8 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs tracking-widest transition-colors"
+                  >
+                      CLOSE
+                  </button>
+              </div>
+          </div>
+      )}
+    </div>
+  );
+}
