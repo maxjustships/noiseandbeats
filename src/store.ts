@@ -1,5 +1,5 @@
 import { atom } from 'nanostores';
-import type { NoiseColor, BeatType } from './types';
+import type { NoiseColor, BeatType } from './lib/types';
 
 export const isPlaying = atom<boolean>(false);
 export const bpm = atom<number>(60);
