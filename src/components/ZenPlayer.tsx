@@ -4,7 +4,8 @@ import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume, isZen, t
 import { audio } from '../lib/AudioEngine';
 import { savePreset, loadPreset } from '../lib/presets';
 import type { NoiseColor, BeatType } from '../lib/types';
-import { Volume2, Activity, Zap, Music, Save } from 'lucide-react';
+import { Volume2, Activity, Zap, Music, Save, Settings, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const COLORS: NoiseColor[] = ['brown', 'red', 'pink', 'white', 'green', 'blue', 'black', 'off'];
 const BEATS: BeatType[] = ['pulse', 'kick', 'binaural', 'off'];
@@ -22,6 +23,8 @@ export default function ZenPlayer() {
   const [showToast, setShowToast] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true); // HUD visibility
   const [showHelp, setShowHelp] = useState(false);
+  const [isSaveMode, setSaveMode] = useState(false);
+  const [mobilePage, setMobilePage] = useState(0);
 
   // Toast helper
   const toast = (msg: string) => {
@@ -204,18 +207,186 @@ export default function ZenPlayer() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  const handlePresetClick = (id: number) => {
+    if (isSaveMode) {
+      if (savePreset(id)) {
+        toast(`Preset ${id} Saved`);
+        setSaveMode(false); // toggle off after save
+      } else {
+        toast("Save Failed");
+      }
+    } else {
+      if (loadPreset(id)) {
+        toast(`Preset ${id} Loaded`);
+      } else {
+        toast(`Preset ${id} Empty`);
+      }
+    }
+  };
+
+  // -- Component Pieces --
+
+  const BpmControl = () => (
+     <div className="space-y-4 group flex flex-col items-center">
+        <div 
+            onClick={() => adjustBpm(5)}
+            className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
+        >
+            <Activity size={16} /> BPM
+        </div>
+        <div className="text-3xl font-light text-zinc-300">{$bpm}</div>
+        <div className="flex justify-center gap-6 text-zinc-600">
+            <button onClick={() => adjustBpm(-5)} className="hover:text-white p-2">[-]</button>
+            <button onClick={() => adjustBpm(5)} className="hover:text-white p-2">[+]</button>
+        </div>
+     </div>
+  );
+
+  const NoiseColorControl = () => (
+     <div className="space-y-4 flex flex-col items-center">
+        <div 
+            onClick={() => cycleNoise(1)}
+            className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
+        >
+            <Zap size={16} /> Noise
+        </div>
+        <div 
+            onClick={() => cycleNoise(1)}
+            className="text-3xl font-light text-zinc-300 capitalize cursor-pointer hover:text-white"
+        >
+            {$noiseColor}
+        </div>
+        <div className="flex justify-center gap-6 text-zinc-600">
+            <button onClick={() => cycleNoise(-1)} className="hover:text-white p-2">&lt;</button>
+            <button onClick={() => cycleNoise(1)} className="hover:text-white p-2">&gt;</button>
+        </div>
+     </div>
+  );
+
+  const NoiseVolControl = () => (
+     <div className="space-y-4 flex flex-col items-center">
+        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+            <Volume2 size={16} /> N. Vol
+        </div>
+        <div className="text-3xl font-light text-zinc-300">{Math.round($noiseVolume * 100)}%</div>
+        <div className="flex justify-center gap-6 text-zinc-600">
+            <button onClick={() => adjustNoiseVol(-0.05)} className="hover:text-white p-2">[-]</button>
+            <button onClick={() => adjustNoiseVol(0.05)} className="hover:text-white p-2">[+]</button>
+        </div>
+     </div>
+  );
+
+  const BeatTypeControl = () => (
+     <div className="space-y-4 flex flex-col items-center">
+        <div 
+            onClick={() => cycleBeat(1)}
+            className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
+        >
+            <Music size={16} /> Beat
+        </div>
+        <div 
+            onClick={() => cycleBeat(1)}
+            className="text-3xl font-light text-zinc-300 capitalize cursor-pointer hover:text-white"
+        >
+            {$beatType}
+        </div>
+        <div className="flex justify-center gap-6 text-zinc-600">
+            <button onClick={() => cycleBeat(-1)} className="hover:text-white p-2">&lt;</button>
+            <button onClick={() => cycleBeat(1)} className="hover:text-white p-2">&gt;</button>
+        </div>
+     </div>
+  );
+
+  const BeatVolControl = () => (
+     <div className="space-y-4 flex flex-col items-center">
+        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+            <Volume2 size={16} /> B. Vol
+        </div>
+        <div className="text-3xl font-light text-zinc-300">{Math.round($beatVolume * 100)}%</div>
+        <div className="flex justify-center gap-6 text-zinc-600">
+            <button onClick={() => adjustBeatVol(-0.05)} className="hover:text-white p-2">[-]</button>
+            <button onClick={() => adjustBeatVol(0.05)} className="hover:text-white p-2">[+]</button>
+        </div>
+     </div>
+  );
+
+  const PresetsControl = () => (
+     <div className="space-y-4 group flex flex-col items-center">
+        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
+            <Save size={16} /> Presets
+        </div>
+        <div className="flex flex-wrap justify-center gap-3 px-2">
+            {[1, 2, 3, 4, 5].map(id => (
+                <button
+                    key={id}
+                    onClick={() => handlePresetClick(id)}
+                    className={`w-10 h-10 rounded-full border flex items-center justify-center text-lg font-light transition-all
+                        ${isSaveMode 
+                            ? 'border-red-500 text-red-500 animate-pulse bg-red-500/10' 
+                            : 'border-zinc-700 hover:border-zinc-400 hover:text-white text-zinc-500'
+                        }
+                    `}
+                >
+                    {id}
+                </button>
+            ))}
+        </div>
+        <div className="pt-2">
+                <button
+                onClick={() => setSaveMode(!isSaveMode)}
+                className={`text-[10px] uppercase tracking-widest px-4 py-2 rounded-full border transition-all
+                    ${isSaveMode 
+                        ? 'bg-red-500 text-white border-red-500' 
+                        : 'text-zinc-600 border-zinc-800 hover:border-zinc-600 hover:text-zinc-400'
+                    }
+                `}
+                >
+                {isSaveMode ? 'Cancel Save' : 'Save Current'}
+                </button>
+        </div>
+     </div>
+  );
+
+  const TimerControl = () => (
+    <div className="flex flex-col items-center justify-center h-full">
+         <div className="text-xs uppercase tracking-widest text-zinc-500 mb-4">Timer</div>
+         <button 
+            onClick={cycleTimer}
+            className="text-xs tracking-widest text-zinc-500 hover:text-white transition-colors uppercase p-4 border border-zinc-800 hover:border-zinc-500 rounded-lg min-w-[200px]"
+        >
+            {$timer ? 'Adjust Timer' : 'Set Timer'}
+        </button>
+    </div>
+  );
+
+  const CloseControl = () => (
+      <div className="flex items-center justify-center h-full">
+         <button 
+            onClick={() => setShowControls(false)}
+            className="flex flex-col items-center justify-center gap-2 text-zinc-500 hover:text-white transition-colors group"
+         >
+              <div className="p-4 rounded-full border border-zinc-800 group-hover:bg-zinc-800 transition-colors">
+                 <X size={24} />
+              </div>
+              <span className="text-[10px] uppercase tracking-widest">Close</span>
+         </button>
+      </div>
+  );
+
   return (
     <div className={`min-h-screen w-full flex flex-col items-center justify-center transition-colors duration-1000 ${$isPlaying ? 'bg-black text-slate-300' : 'bg-zinc-900 text-slate-400'}`}>
       
-      {/* Zen Breathing Visual */}
+      {/* Zen Breathing Visual (Tap to Pause) */}
       {$isPlaying && (
-        <div 
-            className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden"
+        <motion.div 
+            className="absolute inset-0 flex items-center justify-center overflow-hidden cursor-pointer z-10"
+            onClick={() => togglePlay()}
+            whileTap={{ scale: 0.95 }}
         >
             <div className={`w-64 h-64 rounded-full bg-gradient-to-tr from-slate-800 to-transparent blur-3xl opacity-20 animate-breathe`} 
                  style={{ animationDuration: `${60/$bpm * 4}s` }}
             />
-        </div>
+        </motion.div>
       )}
 
       {/* Main Status / Prompt - Now Clickable */}
@@ -245,127 +416,113 @@ export default function ZenPlayer() {
          </button>
       )}
 
-      {/* Zen Mode Restore Trigger (Invisible overlay at bottom when controls hidden) */}
-      {!showControls && $isPlaying && (
-          <div 
-            className="absolute inset-x-0 bottom-0 h-24 z-40 cursor-pointer flex items-end justify-center pb-4 opacity-0 hover:opacity-100 transition-opacity"
-            onClick={toggleZen}
+      {/* Settings Toggle (Visible when controls hidden) */}
+      {!showControls && (
+          <button 
+            onClick={() => setShowControls(true)}
+            className="fixed bottom-12 right-12 z-50 p-6 text-zinc-500 hover:text-white transition-all rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 shadow-2xl group"
+            aria-label="Settings"
           >
-              <span className="text-xs tracking-widest text-zinc-600 uppercase">Show Controls</span>
-          </div>
+              <Settings size={32} className="group-hover:rotate-90 transition-transform duration-500" />
+          </button>
       )}
 
-      {/* Controls HUD */}
+      {/* Controls Overlay (Full Screen Glass) */}
+      <AnimatePresence>
       {showControls && (
-        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-5xl px-8 transition-opacity duration-500 ${$isPlaying ? 'opacity-100' : 'opacity-100'}`}>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-8 text-center select-none">
-             
-             {/* BPM */}
-             <div className="space-y-2 group">
-                <div 
-                    onClick={() => adjustBpm(5)}
-                    className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
-                >
-                    <Activity size={12} /> BPM
-                </div>
-                <div className="text-xl font-light text-zinc-300">{$bpm}</div>
-                <div className="flex justify-center gap-4 text-zinc-600">
-                    <button onClick={() => adjustBpm(-5)} className="hover:text-white p-2">[-]</button>
-                    <button onClick={() => adjustBpm(5)} className="hover:text-white p-2">[+]</button>
-                </div>
-             </div>
+        <div className={`
+            fixed inset-0 z-40 bg-black/80 backdrop-blur-3xl flex flex-col items-center justify-center
+        `}>
+            {/* Desktop Layout (Grid 6) */}
+            <div className="hidden md:flex w-full max-w-7xl flex-col items-center justify-center h-full relative p-12">
+                 <div className="grid grid-cols-6 gap-8 w-full items-start">
+                    <BpmControl />
+                    <NoiseColorControl />
+                    <NoiseVolControl />
+                    <BeatTypeControl />
+                    <BeatVolControl />
+                    <PresetsControl />
+                 </div>
+                 
+                 <div className="mt-20">
+                     <TimerControl />
+                 </div>
 
-             {/* Noise Color */}
-             <div className="space-y-2">
-                <div 
-                    onClick={() => cycleNoise(1)}
-                    className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
-                >
-                    <Zap size={12} /> Noise
-                </div>
-                <div 
-                    onClick={() => cycleNoise(1)}
-                    className="text-xl font-light text-zinc-300 capitalize cursor-pointer hover:text-white"
-                >
-                    {$noiseColor}
-                </div>
-                <div className="flex justify-center gap-4 text-zinc-600">
-                    <button onClick={() => cycleNoise(-1)} className="hover:text-white p-2">&lt;</button>
-                    <button onClick={() => cycleNoise(1)} className="hover:text-white p-2">&gt;</button>
-                </div>
-             </div>
+                 {/* Desktop Close Button (Bottom Right) */}
+                 <button 
+                    onClick={() => setShowControls(false)}
+                    className="absolute bottom-12 right-12 p-6 text-zinc-500 hover:text-white transition-all rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 shadow-2xl"
+                 >
+                    <X size={32} />
+                 </button>
+            </div>
 
-             {/* Noise Vol */}
-             <div className="space-y-2">
-                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-                    <Volume2 size={12} /> N. Vol
+            {/* Mobile Layout (Swipeable Pages) */}
+            <div className="md:hidden w-full h-full relative flex flex-col justify-center">
+                <div className="absolute top-8 left-0 right-0 text-center">
+                    <h2 className="text-xs font-bold tracking-widest text-zinc-600 uppercase">
+                        Studio {mobilePage + 1}/2
+                    </h2>
                 </div>
-                <div className="text-xl font-light text-zinc-300">{Math.round($noiseVolume * 100)}%</div>
-                <div className="flex justify-center gap-4 text-zinc-600">
-                    <button onClick={() => adjustNoiseVol(-0.05)} className="hover:text-white p-2">[-]</button>
-                    <button onClick={() => adjustNoiseVol(0.05)} className="hover:text-white p-2">[+]</button>
-                </div>
-             </div>
 
-             {/* Beat Type */}
-             <div className="space-y-2">
-                <div 
-                    onClick={() => cycleBeat(1)}
-                    className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
-                >
-                    <Music size={12} /> Beat
-                </div>
-                <div 
-                    onClick={() => cycleBeat(1)}
-                    className="text-xl font-light text-zinc-300 capitalize cursor-pointer hover:text-white"
-                >
-                    {$beatType}
-                </div>
-                <div className="flex justify-center gap-4 text-zinc-600">
-                    <button onClick={() => cycleBeat(-1)} className="hover:text-white p-2">&lt;</button>
-                    <button onClick={() => cycleBeat(1)} className="hover:text-white p-2">&gt;</button>
-                </div>
-             </div>
+                <div className="flex-1 flex items-center w-full overflow-hidden relative">
+                    {/* Navigation Arrows */}
+                    {mobilePage > 0 && (
+                        <button 
+                            onClick={() => setMobilePage(0)}
+                            className="absolute left-4 z-50 p-4 text-zinc-600 hover:text-white bg-black/20 rounded-full backdrop-blur-sm"
+                        >
+                            <ChevronLeft size={24} />
+                        </button>
+                    )}
+                    {mobilePage < 1 && (
+                        <button 
+                            onClick={() => setMobilePage(1)}
+                            className="absolute right-4 z-50 p-4 text-zinc-600 hover:text-white bg-black/20 rounded-full backdrop-blur-sm"
+                        >
+                            <ChevronRight size={24} />
+                        </button>
+                    )}
 
-             {/* Beat Vol */}
-             <div className="space-y-2">
-                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-                    <Volume2 size={12} /> B. Vol
+                    <motion.div 
+                        className="w-full px-8"
+                        key={mobilePage}
+                        initial={{ x: mobilePage === 0 ? -300 : 300, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: mobilePage === 0 ? 300 : -300, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        drag="x"
+                        dragConstraints={{ left: 0, right: 0 }}
+                        dragElastic={0.2}
+                        onDragEnd={(e, { offset, velocity }) => {
+                            const swipe = offset.x;
+                            if (swipe < -50 && mobilePage === 0) setMobilePage(1);
+                            if (swipe > 50 && mobilePage === 1) setMobilePage(0);
+                        }}
+                    >
+                        {mobilePage === 0 ? (
+                            <div className="grid grid-cols-2 gap-y-12 gap-x-4">
+                                <NoiseColorControl />
+                                <NoiseVolControl />
+                                <BeatTypeControl />
+                                <BeatVolControl />
+                                <BpmControl />
+                                <CloseControl />
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-y-12 gap-x-4 items-start">
+                                <PresetsControl />
+                                <TimerControl />
+                                <div></div> {/* Empty Spacer */}
+                                <CloseControl />
+                            </div>
+                        )}
+                    </motion.div>
                 </div>
-                <div className="text-xl font-light text-zinc-300">{Math.round($beatVolume * 100)}%</div>
-                <div className="flex justify-center gap-4 text-zinc-600">
-                    <button onClick={() => adjustBeatVol(-0.05)} className="hover:text-white p-2">[-]</button>
-                    <button onClick={() => adjustBeatVol(0.05)} className="hover:text-white p-2">[+]</button>
-                </div>
-             </div>
-
-             {/* Presets */}
-             <div className="space-y-2 opacity-50 hover:opacity-100 transition-opacity">
-                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-                    <Save size={12} /> Presets
-                </div>
-                <div className="text-xl font-light text-zinc-300">1-9</div>
-                <div className="text-[10px] text-zinc-600">keys only</div>
-             </div>
-
-          </div>
-          
-          <div className="mt-8 text-center flex justify-center gap-8">
-             <button 
-                onClick={cycleTimer}
-                className="text-xs tracking-widest text-zinc-600 hover:text-white transition-colors uppercase p-2"
-             >
-                {$timer ? 'Adjust Timer' : 'Set Timer'}
-             </button>
-             <button 
-                onClick={toggleZen}
-                className="text-xs tracking-widest text-zinc-600 hover:text-white transition-colors uppercase p-2"
-             >
-                Enter Zen Mode
-             </button>
-          </div>
+            </div>
         </div>
       )}
+      </AnimatePresence>
 
       {/* Toast Notification */}
       {showToast && (
@@ -389,7 +546,7 @@ export default function ZenPlayer() {
                       <div>Y / O</div><div className="text-right">Beat Vol - / +</div>
                       <div>[ / ]</div><div className="text-right">BPM - / +</div>
                       <div>0 - 9</div><div className="text-right">Load Preset</div>
-                      <div>Ctrl + 0-9</div><div className="text-right">Save Preset</div>
+                      <div>Ctrl+0-9 / Toggle UI</div><div className="text-right">Save Preset</div>
                       <div>T</div><div className="text-right">Cycle Timer</div>
                       <div>ESC</div><div className="text-right">Zen Mode</div>
                   </div>

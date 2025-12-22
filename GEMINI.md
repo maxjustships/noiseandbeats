@@ -1,0 +1,71 @@
+# Noises & Beats
+
+## Project Overview
+
+**Noises & Beats** is a high-performance, minimalist web application designed for productivity and focus. It generates "colors" of noise (Brown, Pink, White, etc.) and rhythmic beats (Binaural, Pulse, Kick) in real-time using the Web Audio API.
+
+The project emphasizes a "Zen," distraction-free user experience, featuring a dark monochromatic UI and keyboard-first controls. It is built to be deployed as a static site (e.g., on Cloudflare Pages).
+
+## Tech Stack
+
+- **Framework:** [Astro](https://astro.build/) (Static Site Generation, Shell)
+- **UI Library:** [React](https://react.dev/) (Interactive components, Audio state)
+- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+- **State Management:** [Nanostores](https://github.com/nanostores/nanostores)
+- **Audio:** Native Web Audio API (No external assets)
+- **Package Manager:** `pnpm`
+
+## Architecture & Design
+
+### Audio Engine
+- Located in `src/lib/AudioEngine.ts`.
+- Uses a **Lookahead Scheduler** pattern for precise timing.
+- Generates audio procedurally (oscillators, noise buffers, filters) to ensure small bundle size and instant loading.
+- **Noise Types:** Brown, Pink, White, Green, Blue, Black.
+- **Beat Types:** Kick, Pulse, Binaural.
+
+### User Interface
+- **Zen Mode:** The interface is designed to fade out or minimize distractions.
+- **Keyboard Control:** The app is designed to be controlled primarily via keyboard shortcuts (vim-like navigation for volume/BPM).
+- **Entry Point:** `src/pages/index.astro` hosts the main shell and meta tags.
+- **Main Component:** `src/components/ZenPlayer.tsx` handles the interactive UI and mounts the Audio Engine.
+
+## Building and Running
+
+This project uses `pnpm`.
+
+### Development
+Start the local development server:
+```bash
+pnpm run dev
+# or
+npm run dev
+```
+
+### Production Build
+Build the project for production (static assets in `dist/`):
+```bash
+pnpm run build
+```
+
+### Preview
+Preview the production build locally:
+```bash
+pnpm run preview
+```
+
+## Directory Structure
+
+- `src/`
+  - `components/`: React UI components (e.g., `ZenPlayer.tsx`).
+  - `lib/`: Core logic, specifically `AudioEngine.ts` and `presets.ts`.
+  - `pages/`: Astro routes (only `index.astro`).
+  - `store.ts`: Nanostores state definitions.
+- `docs/`: Project documentation and design plans.
+- `public/`: Static assets (favicon, manifest, etc.).
+
+## Development Conventions
+
+- **State:** Use Nanostores for sharing state between React components and the Audio Engine if necessary, or localized React state for purely UI concerns.
+- **Styling:** Use utility-first Tailwind CSS. Keep custom CSS in `src/styles/global.css` to a minimum.
+- **Performance:** Ensure the `AudioContext` is suspended/resumed correctly to respect browser autoplay policies.
