@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
-import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume, isZen, timerRemaining } from '../store';
+import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume, timerRemaining, isZen } from '../store';
 import { audio } from '../lib/AudioEngine';
 import { savePreset, loadPreset } from '../lib/presets';
 import type { NoiseColor, BeatType } from '../lib/types';
-import { Volume2, Activity, Zap, Music, Save, Settings, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Volume2, Activity, Zap, Music, Save, Settings, X, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const COLORS: NoiseColor[] = ['brown', 'red', 'pink', 'white', 'green', 'blue', 'black', 'off'];
@@ -17,7 +17,6 @@ export default function ZenPlayer() {
   const $beatType = useStore(beatType);
   const $noiseVolume = useStore(noiseVolume);
   const $beatVolume = useStore(beatVolume);
-  const $isZen = useStore(isZen);
   const $timer = useStore(timerRemaining);
 
   const [showToast, setShowToast] = useState<string | null>(null);
@@ -235,9 +234,9 @@ export default function ZenPlayer() {
             <Activity size={16} /> BPM
         </div>
         <div className="text-3xl font-light text-zinc-300">{$bpm}</div>
-        <div className="flex justify-center gap-6 text-zinc-600">
-            <button onClick={() => adjustBpm(-5)} className="hover:text-white p-2">[-]</button>
-            <button onClick={() => adjustBpm(5)} className="hover:text-white p-2">[+]</button>
+        <div className="flex justify-center gap-4 text-zinc-500">
+            <button onClick={() => adjustBpm(-5)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Minus size={18} /></button>
+            <button onClick={() => adjustBpm(5)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Plus size={18} /></button>
         </div>
      </div>
   );
@@ -256,9 +255,9 @@ export default function ZenPlayer() {
         >
             {$noiseColor}
         </div>
-        <div className="flex justify-center gap-6 text-zinc-600">
-            <button onClick={() => cycleNoise(-1)} className="hover:text-white p-2">&lt;</button>
-            <button onClick={() => cycleNoise(1)} className="hover:text-white p-2">&gt;</button>
+        <div className="flex justify-center gap-4 text-zinc-500">
+            <button onClick={() => cycleNoise(-1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronLeft size={18} /></button>
+            <button onClick={() => cycleNoise(1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronRight size={18} /></button>
         </div>
      </div>
   );
@@ -269,9 +268,9 @@ export default function ZenPlayer() {
             <Volume2 size={16} /> N. Vol
         </div>
         <div className="text-3xl font-light text-zinc-300">{Math.round($noiseVolume * 100)}%</div>
-        <div className="flex justify-center gap-6 text-zinc-600">
-            <button onClick={() => adjustNoiseVol(-0.05)} className="hover:text-white p-2">[-]</button>
-            <button onClick={() => adjustNoiseVol(0.05)} className="hover:text-white p-2">[+]</button>
+        <div className="flex justify-center gap-4 text-zinc-500">
+            <button onClick={() => adjustNoiseVol(-0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Minus size={18} /></button>
+            <button onClick={() => adjustNoiseVol(0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Plus size={18} /></button>
         </div>
      </div>
   );
@@ -290,9 +289,9 @@ export default function ZenPlayer() {
         >
             {$beatType}
         </div>
-        <div className="flex justify-center gap-6 text-zinc-600">
-            <button onClick={() => cycleBeat(-1)} className="hover:text-white p-2">&lt;</button>
-            <button onClick={() => cycleBeat(1)} className="hover:text-white p-2">&gt;</button>
+        <div className="flex justify-center gap-4 text-zinc-500">
+            <button onClick={() => cycleBeat(-1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronLeft size={18} /></button>
+            <button onClick={() => cycleBeat(1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronRight size={18} /></button>
         </div>
      </div>
   );
@@ -303,9 +302,9 @@ export default function ZenPlayer() {
             <Volume2 size={16} /> B. Vol
         </div>
         <div className="text-3xl font-light text-zinc-300">{Math.round($beatVolume * 100)}%</div>
-        <div className="flex justify-center gap-6 text-zinc-600">
-            <button onClick={() => adjustBeatVol(-0.05)} className="hover:text-white p-2">[-]</button>
-            <button onClick={() => adjustBeatVol(0.05)} className="hover:text-white p-2">[+]</button>
+        <div className="flex justify-center gap-4 text-zinc-500">
+            <button onClick={() => adjustBeatVol(-0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Minus size={18} /></button>
+            <button onClick={() => adjustBeatVol(0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Plus size={18} /></button>
         </div>
      </div>
   );
@@ -352,7 +351,7 @@ export default function ZenPlayer() {
          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-4">Timer</div>
          <button 
             onClick={cycleTimer}
-            className="text-xs tracking-widest text-zinc-500 hover:text-white transition-colors uppercase p-4 border border-zinc-800 hover:border-zinc-500 rounded-lg min-w-[200px]"
+            className="text-xs tracking-widest text-zinc-500 hover:text-white transition-colors uppercase px-6 py-3 border border-zinc-800 hover:border-zinc-500 rounded-lg hover:bg-zinc-800/50"
         >
             {$timer ? 'Adjust Timer' : 'Set Timer'}
         </button>
@@ -494,7 +493,7 @@ export default function ZenPlayer() {
                         drag="x"
                         dragConstraints={{ left: 0, right: 0 }}
                         dragElastic={0.2}
-                        onDragEnd={(e, { offset, velocity }) => {
+                        onDragEnd={(_, { offset }) => {
                             const swipe = offset.x;
                             if (swipe < -50 && mobilePage === 0) setMobilePage(1);
                             if (swipe > 50 && mobilePage === 1) setMobilePage(0);

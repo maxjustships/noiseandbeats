@@ -25,7 +25,7 @@ const schema = JSON.stringify({
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="canonical" href={siteUrl} />
         
         <title>Noises & Beats | Minimalist Focus Audio</title>
@@ -50,6 +50,17 @@ const schema = JSON.stringify({
         
         <!-- Structured Data -->
         <script type="application/ld+json" set:html={schema} />
+        
+        <script>
+            import { registerSW } from 'virtual:pwa-register';
+            
+            registerSW({
+                immediate: true,
+                onOfflineReady() {
+                    console.log('App is ready for offline usage');
+                },
+            });
+        </script>
 	</head>
 	<body class="bg-black overflow-hidden">
 		<ZenPlayer client:load />

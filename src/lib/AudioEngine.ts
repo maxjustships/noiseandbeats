@@ -1,5 +1,5 @@
 import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume } from '../store';
-import type { NoiseColor, BeatType } from './types';
+
 
 export class AudioEngine {
   private ctx: AudioContext | null = null;
