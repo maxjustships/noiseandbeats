@@ -56,18 +56,6 @@ const schema = JSON.stringify({
             
             registerSW({
                 immediate: true,
-                onNeedRefresh() {
-                    console.log('New content available, reload to update.');
-                },
-                onOfflineReady() {
-                    console.log('App is ready for offline usage');
-                },
-                onRegistered(r) {
-                    console.log('SW Registered:', r);
-                },
-                onRegisterError(error) {
-                    console.error('SW Registration Error:', error);
-                },
             });
         </script>
 	</head>
