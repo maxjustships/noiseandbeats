@@ -4,7 +4,7 @@
 
 **Noises & Beats** is a high-performance, minimalist web application designed for productivity and focus. It generates "colors" of noise (Brown, Pink, White, etc.) and rhythmic beats (Binaural, Pulse, Kick) in real-time using the Web Audio API.
 
-The project emphasizes a "Zen," distraction-free user experience, featuring a dark monochromatic UI and keyboard-first controls. It is built to be deployed as a static site (e.g., on Cloudflare Pages).
+The project emphasizes a "Zen," distraction-free user experience, featuring a dark monochromatic UI and keyboard-first controls. It is built to be deployed as a static site (e.g., on Cloudflare Pages) and supports full offline usage as a Progressive Web App (PWA).
 
 ## Tech Stack
 
@@ -12,6 +12,8 @@ The project emphasizes a "Zen," distraction-free user experience, featuring a da
 - **UI Library:** [React](https://react.dev/) (Interactive components, Audio state)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
 - **State Management:** [Nanostores](https://github.com/nanostores/nanostores)
+- **PWA:** [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) (Offline support, Service Worker)
+- **Icons:** [Lucide React](https://lucide.dev/) (UI Icons)
 - **Audio:** Native Web Audio API (No external assets)
 - **Package Manager:** `pnpm`
 
@@ -27,8 +29,15 @@ The project emphasizes a "Zen," distraction-free user experience, featuring a da
 ### User Interface
 - **Zen Mode:** The interface is designed to fade out or minimize distractions.
 - **Keyboard Control:** The app is designed to be controlled primarily via keyboard shortcuts (vim-like navigation for volume/BPM).
+- **Interactive Controls:** Styled buttons with Lucide icons for intuitive mouse/touch interaction.
 - **Entry Point:** `src/pages/index.astro` hosts the main shell and meta tags.
 - **Main Component:** `src/components/ZenPlayer.tsx` handles the interactive UI and mounts the Audio Engine.
+
+### PWA & Offline Support
+- Configured via `astro.config.mjs` using `vite-plugin-pwa`.
+- Generates `manifest.webmanifest` and `sw.js` (Service Worker) at build time.
+- Caches all static assets (HTML, CSS, JS, SVG) for offline functionality.
+- Auto-updates the service worker to ensure users get the latest version.
 
 ## Building and Running
 
@@ -62,10 +71,11 @@ pnpm run preview
   - `pages/`: Astro routes (only `index.astro`).
   - `store.ts`: Nanostores state definitions.
 - `docs/`: Project documentation and design plans.
-- `public/`: Static assets (favicon, manifest, etc.).
+- `public/`: Static assets (favicon, etc.). Note: `manifest.webmanifest` is auto-generated.
 
 ## Development Conventions
 
 - **State:** Use Nanostores for sharing state between React components and the Audio Engine if necessary, or localized React state for purely UI concerns.
 - **Styling:** Use utility-first Tailwind CSS. Keep custom CSS in `src/styles/global.css` to a minimum.
 - **Performance:** Ensure the `AudioContext` is suspended/resumed correctly to respect browser autoplay policies.
+- **PWA:** Ensure `vite-plugin-pwa` configuration in `astro.config.mjs` is updated if new asset types are added.
