@@ -34,10 +34,12 @@ The project emphasizes a "Zen," distraction-free user experience, featuring a da
 - **Main Component:** `src/components/ZenPlayer.tsx` handles the interactive UI and mounts the Audio Engine.
 
 ### PWA & Offline Support
-- Configured via `astro.config.mjs` using `vite-plugin-pwa`.
-- Generates `manifest.webmanifest` and `sw.js` (Service Worker) at build time.
-- Caches all static assets (HTML, CSS, JS, SVG) for offline functionality.
-- Auto-updates the service worker to ensure users get the latest version.
+- **Manifest:** Generated via `vite-plugin-pwa` in `astro.config.mjs` (`manifest.webmanifest`).
+- **Service Worker:** Generated via a custom post-build script (`scripts/generate-sw.mjs`) using `workbox-build`.
+  - **Reason:** Standard `vite-plugin-pwa` generation runs before Astro generates `index.html` (SSG), causing the HTML to be missing from the precache.
+  - **Mechanism:** The `build` script runs `astro build && node scripts/generate-sw.mjs` to ensure the final `dist/index.html` is captured.
+- **Caching:** Precaches all `dist/` assets (HTML, CSS, JS, SVG) for full offline functionality.
+- **Updates:** Configured with `clientsClaim: true` and `skipWaiting: true` for immediate updates.
 
 ## Building and Running
 
@@ -52,7 +54,7 @@ npm run dev
 ```
 
 ### Production Build
-Build the project for production (static assets in `dist/`):
+Build the project for production (runs Astro build + SW generation):
 ```bash
 pnpm run build
 ```
