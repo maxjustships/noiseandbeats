@@ -28,12 +28,6 @@ export default defineConfig({
             }
           ]
         },
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,svg,png,ico,txt}'],
-          navigateFallback: '/index.html',
-          clientsClaim: true,
-          skipWaiting: true,
-        },
         devOptions: {
           enabled: true
         }
