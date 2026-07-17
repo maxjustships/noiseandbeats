@@ -1,14 +1,37 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useStore } from '@nanostores/react';
-import { isPlaying, bpm, noiseColor, beatType, noiseVolume, beatVolume, timerRemaining, isZen } from '../store';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  beatType,
+  beatVolume,
+  bpm,
+  isPlaying,
+  isZen,
+  noiseColor,
+  noiseVolume,
+  timerRemaining,
+  type Store,
+} from '../store';
 import { audio } from '../lib/AudioEngine';
-import { savePreset, loadPreset } from '../lib/presets';
-import type { NoiseColor, BeatType } from '../lib/types';
-import { Volume2, Activity, Zap, Music, Save, Settings, X, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { loadPreset, savePreset } from '../lib/presets';
+import { nextTimerDuration, tickTimer } from '../lib/timer';
+import type { BeatType, NoiseColor } from '../lib/types';
 
 const COLORS: NoiseColor[] = ['brown', 'red', 'pink', 'white', 'green', 'blue', 'black', 'off'];
 const BEATS: BeatType[] = ['pulse', 'kick', 'binaural', 'off'];
+const REPOSITORY_URL = 'https://github.com/maxjustships/noiseandbeats';
+
+function useStore<T>(store: Store<T>) {
+  return useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+function formatTime(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+
+function isInteractiveTarget(target: EventTarget | null) {
+  return target instanceof Element
+    && Boolean(target.closest('button, a, input, select, textarea, [contenteditable="true"], [role="dialog"]'));
+}
 
 export default function ZenPlayer() {
   const $isPlaying = useStore(isPlaying);
@@ -20,544 +43,433 @@ export default function ZenPlayer() {
   const $timer = useStore(timerRemaining);
 
   const [showToast, setShowToast] = useState<string | null>(null);
-  const [showControls, setShowControls] = useState(true); // HUD visibility
+  const [showControls, setShowControls] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
   const [isSaveMode, setSaveMode] = useState(false);
-  const [mobilePage, setMobilePage] = useState(0);
+  const [activePreset, setActivePreset] = useState<number | null>(null);
+  const [presetStatus, setPresetStatus] = useState('No preset loaded');
+  const toastTimer = useRef<number | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const dialogCloseRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
-  // Toast helper
-  const toast = (msg: string) => {
-    setShowToast(msg);
-    setTimeout(() => setShowToast(null), 2000);
-  };
-
-  // Timer Tick
-  useEffect(() => {
-    let interval: number;
-    if ($isPlaying && $timer !== null && $timer > 0) {
-      interval = window.setInterval(() => {
-        timerRemaining.set($timer - 1);
-      }, 1000);
-    } else if ($timer === 0) {
-      // Timer finished
-      isPlaying.set(false);
-      audio.togglePlay(false);
-      timerRemaining.set(null);
-      toast("Session Complete");
-    }
-    return () => clearInterval(interval);
-  }, [$isPlaying, $timer]);
-
-  // --- ZEN LOGIC (Handlers) ---
-
-  const togglePlay = useCallback((forceState?: boolean) => {
-    const newState = forceState !== undefined ? forceState : !isPlaying.get();
-    isPlaying.set(newState);
-    audio.togglePlay(newState);
-    toast(newState ? "Focusing..." : "Paused");
+  const toast = useCallback((message: string) => {
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    setShowToast(message);
+    toastTimer.current = window.setTimeout(() => {
+      setShowToast(null);
+      toastTimer.current = null;
+    }, 2200);
   }, []);
+
+  useEffect(() => () => {
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+  }, []);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (showHelp) {
+      returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (!dialog.open) dialog.showModal();
+      window.requestAnimationFrame(() => dialogCloseRef.current?.focus());
+      return;
+    }
+
+    if (dialog.open) dialog.close();
+    const returnFocus = returnFocusRef.current;
+    if (returnFocus) window.requestAnimationFrame(() => returnFocus.focus());
+  }, [showHelp]);
+
+  useEffect(() => {
+    if (!$isPlaying || $timer === null) return;
+
+    const interval = window.setInterval(() => {
+      const next = tickTimer(timerRemaining.get(), isPlaying.get());
+      timerRemaining.set(next);
+
+      if (next === 0) {
+        isPlaying.set(false);
+        timerRemaining.set(null);
+        void audio.togglePlay(false);
+        toast('Session complete');
+      }
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [$isPlaying, $timer === null, toast]);
+
+  const markCustom = useCallback(() => {
+    setActivePreset(null);
+    setPresetStatus('Custom settings');
+  }, []);
+
+  const togglePlay = useCallback(async (forceState?: boolean) => {
+    const next = forceState ?? !isPlaying.get();
+    isPlaying.set(next);
+
+    try {
+      await audio.togglePlay(next);
+      toast(next ? 'Playing' : 'Paused');
+    } catch (error) {
+      console.error('Unable to change audio state', error);
+      isPlaying.set(false);
+      toast('Audio unavailable');
+    }
+  }, [toast]);
 
   const adjustBpm = useCallback((delta: number) => {
-    const newBpm = Math.max(30, Math.min(220, bpm.get() + delta));
-    bpm.set(newBpm);
-    toast(`Tempo: ${newBpm}`);
-  }, []);
+    const next = Math.max(30, Math.min(220, bpm.get() + delta));
+    bpm.set(next);
+    markCustom();
+    toast(`Tempo ${next} BPM`);
+  }, [markCustom, toast]);
 
   const cycleNoise = useCallback((direction: 1 | -1) => {
-    const currentNoiseIdx = COLORS.indexOf(noiseColor.get());
-    const nextNoise = COLORS[(currentNoiseIdx + direction + COLORS.length) % COLORS.length];
-    noiseColor.set(nextNoise);
-    toast(`Noise: ${nextNoise}`);
-  }, []);
+    const index = COLORS.indexOf(noiseColor.get());
+    const next = COLORS[(index + direction + COLORS.length) % COLORS.length];
+    noiseColor.set(next);
+    markCustom();
+    toast(`Noise ${next}`);
+  }, [markCustom, toast]);
 
-  const adjustNoiseVol = useCallback((delta: number) => {
-     const nv = Math.max(0, Math.min(1, parseFloat((noiseVolume.get() + delta).toFixed(2))));
-     noiseVolume.set(nv);
-     toast(`Noise Volume: ${Math.round(nv * 100)}%`);
-  }, []);
+  const adjustNoiseVolume = useCallback((delta: number) => {
+    const next = Math.max(0, Math.min(1, Number((noiseVolume.get() + delta).toFixed(2))));
+    noiseVolume.set(next);
+    markCustom();
+    toast(`Noise volume ${Math.round(next * 100)}%`);
+  }, [markCustom, toast]);
 
   const cycleBeat = useCallback((direction: 1 | -1) => {
-     const bIdx = BEATS.indexOf(beatType.get());
-     const nextBeat = BEATS[(bIdx + direction + BEATS.length) % BEATS.length];
-     beatType.set(nextBeat);
-     toast(`Beat: ${nextBeat}`);
-  }, []);
+    const index = BEATS.indexOf(beatType.get());
+    const next = BEATS[(index + direction + BEATS.length) % BEATS.length];
+    beatType.set(next);
+    markCustom();
+    toast(`Beat ${next}`);
+  }, [markCustom, toast]);
 
-  const adjustBeatVol = useCallback((delta: number) => {
-     const bv = Math.max(0, Math.min(1, parseFloat((beatVolume.get() + delta).toFixed(2))));
-     beatVolume.set(bv);
-     toast(`Beat Volume: ${Math.round(bv * 100)}%`);
-  }, []);
+  const adjustBeatVolume = useCallback((delta: number) => {
+    const next = Math.max(0, Math.min(1, Number((beatVolume.get() + delta).toFixed(2))));
+    beatVolume.set(next);
+    markCustom();
+    toast(`Beat volume ${Math.round(next * 100)}%`);
+  }, [markCustom, toast]);
 
   const cycleTimer = useCallback(() => {
-    const currentT = timerRemaining.get();
-    let nextT: number | null = null;
-    let msg = "Timer Stopped";
+    const next = nextTimerDuration(timerRemaining.get());
+    timerRemaining.set(next);
+    toast(next === null ? 'Timer off' : `Timer ${Math.round(next / 60)} minutes`);
+  }, [toast]);
 
-    if (currentT === null) {
-        nextT = 15 * 60;
-        msg = "Timer: 15m";
-    } else if (currentT <= 15 * 60) {
-        nextT = 25 * 60;
-        msg = "Timer: 25m";
-    } else if (currentT <= 25 * 60) {
-        nextT = 45 * 60;
-        msg = "Timer: 45m";
-    } else if (currentT <= 45 * 60) {
-        nextT = 60 * 60;
-        msg = "Timer: 60m";
-    } else {
-        nextT = null;
-        msg = "Timer Off";
-    }
-    
-    timerRemaining.set(nextT);
-    toast(msg);
-  }, []);
+  const setControlsVisible = useCallback((visible: boolean) => {
+    isZen.set(!visible);
+    setShowControls(visible);
+    toast(visible ? 'Controls visible' : 'Controls hidden');
+  }, [toast]);
 
-  const toggleZen = useCallback(() => {
-    if (showControls) {
-        isZen.set(true);
-        setShowControls(false);
-        toast("Zen Mode On");
+  const handlePreset = useCallback((id: number) => {
+    if (isSaveMode) {
+      if (savePreset(id)) {
+        setActivePreset(id);
+        setPresetStatus(`Preset ${id} saved and active`);
+        setSaveMode(false);
+        toast(`Preset ${id} saved`);
       } else {
-        isZen.set(false);
-        setShowControls(true);
-        toast("Controls Visible");
+        setPresetStatus('Preset save failed');
+        toast('Save failed');
       }
-  }, [showControls]);
-
-
-  // Keyboard Handlers
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.target instanceof HTMLInputElement) return;
-
-    // Handle Number Keys for Presets (Logic kept inline for now as it's complex)
-    if (e.key >= '0' && e.key <= '9') {
-        const id = parseInt(e.key);
-        if (e.ctrlKey) {
-            e.preventDefault();
-            if (savePreset(id)) {
-                toast(`Preset ${id} Saved`);
-            } else {
-                toast("Save Failed");
-            }
-        } else {
-            if (loadPreset(id)) {
-                toast(`Preset ${id} Loaded`);
-            } else {
-                toast(`Preset ${id} Empty`);
-            }
-        }
-        return;
+      return;
     }
 
-    switch (e.key) {
-      case ' ':
-        e.preventDefault();
-        togglePlay();
-        break;
-      
-      case 'Escape':
+    if (loadPreset(id)) {
+      setActivePreset(id);
+      setPresetStatus(`Preset ${id} loaded`);
+      toast(`Preset ${id} loaded`);
+    } else {
+      setActivePreset(null);
+      setPresetStatus(`Preset ${id} is empty`);
+      toast(`Preset ${id} empty`);
+    }
+  }, [isSaveMode, toast]);
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (showHelp) {
+      if (event.key === 'Escape' || event.key === '?') {
+        event.preventDefault();
         setShowHelp(false);
-        toggleZen();
-        break;
-
-      // BPM
-      case ']': adjustBpm(5); break;
-      case '[': adjustBpm(-5); break;
-
-      // Noise Selection
-      case 'k': cycleNoise(1); break;
-      case 'j': cycleNoise(-1); break;
-
-      // Noise Volume
-      case 'h': adjustNoiseVol(-0.05); break;
-      case 'l': adjustNoiseVol(0.05); break;
-
-      // Beat Selection
-      case 'i': cycleBeat(1); break;
-      case 'u': cycleBeat(-1); break;
-
-      // Beat Volume
-      case 'y': adjustBeatVol(-0.05); break;
-      case 'o': adjustBeatVol(0.05); break;
-
-      case 'T': 
-        cycleTimer(); 
-        break;
-      
-      case '?':
-          setShowHelp(prev => !prev);
-          break;
+      }
+      return;
     }
-  }, [showControls, togglePlay, adjustBpm, cycleNoise, adjustNoiseVol, cycleBeat, adjustBeatVol, cycleTimer, toggleZen]);
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setControlsVisible(!showControls);
+      return;
+    }
+
+    if (isInteractiveTarget(event.target) || event.metaKey || event.altKey) return;
+
+    if (/^[0-9]$/.test(event.key)) {
+      event.preventDefault();
+      const id = Number(event.key);
+      if (event.ctrlKey) {
+        if (savePreset(id)) {
+          setActivePreset(id);
+          setPresetStatus(`Preset ${id} saved and active`);
+          toast(`Preset ${id} saved`);
+        } else {
+          setPresetStatus('Preset save failed');
+          toast('Save failed');
+        }
+      } else if (loadPreset(id)) {
+        setActivePreset(id);
+        setPresetStatus(`Preset ${id} loaded`);
+        toast(`Preset ${id} loaded`);
+      } else {
+        setActivePreset(null);
+        setPresetStatus(`Preset ${id} is empty`);
+        toast(`Preset ${id} empty`);
+      }
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    const actions: Record<string, () => void> = {
+      ' ': () => { void togglePlay(); },
+      ']': () => adjustBpm(5),
+      '[': () => adjustBpm(-5),
+      k: () => cycleNoise(1),
+      j: () => cycleNoise(-1),
+      h: () => adjustNoiseVolume(-0.05),
+      l: () => adjustNoiseVolume(0.05),
+      i: () => cycleBeat(1),
+      u: () => cycleBeat(-1),
+      y: () => adjustBeatVolume(-0.05),
+      o: () => adjustBeatVolume(0.05),
+      t: cycleTimer,
+      '?': () => setShowHelp(true),
+    };
+
+    const action = actions[key];
+    if (action) {
+      event.preventDefault();
+      action();
+    }
+  }, [
+    adjustBeatVolume,
+    adjustBpm,
+    adjustNoiseVolume,
+    cycleBeat,
+    cycleNoise,
+    cycleTimer,
+    setControlsVisible,
+    showControls,
+    showHelp,
+    toast,
+    togglePlay,
+  ]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-
-  // Format timer
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const handlePresetClick = (id: number) => {
-    if (isSaveMode) {
-      if (savePreset(id)) {
-        toast(`Preset ${id} Saved`);
-        setSaveMode(false); // toggle off after save
-      } else {
-        toast("Save Failed");
-      }
-    } else {
-      if (loadPreset(id)) {
-        toast(`Preset ${id} Loaded`);
-      } else {
-        toast(`Preset ${id} Empty`);
-      }
-    }
-  };
-
-  // -- Component Pieces --
+  const controlButton = 'control-button';
+  const timerLabel = $timer === null ? 'Timer off' : `${formatTime($timer)} remaining`;
 
   const BpmControl = () => (
-     <div className="space-y-4 group flex flex-col items-center">
-        <div 
-            onClick={() => adjustBpm(5)}
-            className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
-        >
-            <Activity size={16} /> BPM
-        </div>
-        <div className="text-3xl font-light text-zinc-300">{$bpm}</div>
-        <div className="flex justify-center gap-4 text-zinc-500">
-            <button onClick={() => adjustBpm(-5)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Minus size={18} /></button>
-            <button onClick={() => adjustBpm(5)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Plus size={18} /></button>
-        </div>
-     </div>
+    <section className="control-group" aria-labelledby="bpm-label">
+      <div id="bpm-label" className="control-label">BPM</div>
+      <output className="control-value" aria-live="polite">{$bpm}</output>
+      <div className="control-actions">
+        <button type="button" onClick={() => adjustBpm(-5)} className={controlButton} aria-label="Decrease tempo by 5 BPM"><span aria-hidden="true">−</span></button>
+        <button type="button" onClick={() => adjustBpm(5)} className={controlButton} aria-label="Increase tempo by 5 BPM"><span aria-hidden="true">+</span></button>
+      </div>
+    </section>
   );
 
-  const NoiseColorControl = () => (
-     <div className="space-y-4 flex flex-col items-center">
-        <div 
-            onClick={() => cycleNoise(1)}
-            className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
-        >
-            <Zap size={16} /> Noise
-        </div>
-        <div 
-            onClick={() => cycleNoise(1)}
-            className="text-3xl font-light text-zinc-300 capitalize cursor-pointer hover:text-white"
-        >
-            {$noiseColor}
-        </div>
-        <div className="flex justify-center gap-4 text-zinc-500">
-            <button onClick={() => cycleNoise(-1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronLeft size={18} /></button>
-            <button onClick={() => cycleNoise(1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronRight size={18} /></button>
-        </div>
-     </div>
+  const NoiseControl = () => (
+    <section className="control-group" aria-labelledby="noise-label">
+      <div id="noise-label" className="control-label">Noise</div>
+      <button type="button" onClick={() => cycleNoise(1)} className="control-value capitalize" aria-label={`Noise ${$noiseColor}; choose next noise`}>{$noiseColor}</button>
+      <div className="control-actions">
+        <button type="button" onClick={() => cycleNoise(-1)} className={controlButton} aria-label="Previous noise"><span aria-hidden="true">‹</span></button>
+        <button type="button" onClick={() => cycleNoise(1)} className={controlButton} aria-label="Next noise"><span aria-hidden="true">›</span></button>
+      </div>
+    </section>
   );
 
-  const NoiseVolControl = () => (
-     <div className="space-y-4 flex flex-col items-center">
-        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-            <Volume2 size={16} /> N. Vol
-        </div>
-        <div className="text-3xl font-light text-zinc-300">{Math.round($noiseVolume * 100)}%</div>
-        <div className="flex justify-center gap-4 text-zinc-500">
-            <button onClick={() => adjustNoiseVol(-0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Minus size={18} /></button>
-            <button onClick={() => adjustNoiseVol(0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Plus size={18} /></button>
-        </div>
-     </div>
+  const NoiseVolumeControl = () => (
+    <section className="control-group" aria-labelledby="noise-volume-label">
+      <div id="noise-volume-label" className="control-label">Noise vol</div>
+      <output className="control-value" aria-live="polite">{Math.round($noiseVolume * 100)}%</output>
+      <div className="control-actions">
+        <button type="button" onClick={() => adjustNoiseVolume(-0.05)} className={controlButton} aria-label="Decrease noise volume"><span aria-hidden="true">−</span></button>
+        <button type="button" onClick={() => adjustNoiseVolume(0.05)} className={controlButton} aria-label="Increase noise volume"><span aria-hidden="true">+</span></button>
+      </div>
+    </section>
   );
 
-  const BeatTypeControl = () => (
-     <div className="space-y-4 flex flex-col items-center">
-        <div 
-            onClick={() => cycleBeat(1)}
-            className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500 cursor-pointer hover:text-zinc-300"
-        >
-            <Music size={16} /> Beat
-        </div>
-        <div 
-            onClick={() => cycleBeat(1)}
-            className="text-3xl font-light text-zinc-300 capitalize cursor-pointer hover:text-white"
-        >
-            {$beatType}
-        </div>
-        <div className="flex justify-center gap-4 text-zinc-500">
-            <button onClick={() => cycleBeat(-1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronLeft size={18} /></button>
-            <button onClick={() => cycleBeat(1)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><ChevronRight size={18} /></button>
-        </div>
-     </div>
+  const BeatControl = () => (
+    <section className="control-group" aria-labelledby="beat-label">
+      <div id="beat-label" className="control-label">Beat</div>
+      <button type="button" onClick={() => cycleBeat(1)} className="control-value capitalize" aria-label={`Beat ${$beatType}; choose next beat`}>{$beatType}</button>
+      <div className="control-actions">
+        <button type="button" onClick={() => cycleBeat(-1)} className={controlButton} aria-label="Previous beat"><span aria-hidden="true">‹</span></button>
+        <button type="button" onClick={() => cycleBeat(1)} className={controlButton} aria-label="Next beat"><span aria-hidden="true">›</span></button>
+      </div>
+    </section>
   );
 
-  const BeatVolControl = () => (
-     <div className="space-y-4 flex flex-col items-center">
-        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-            <Volume2 size={16} /> B. Vol
-        </div>
-        <div className="text-3xl font-light text-zinc-300">{Math.round($beatVolume * 100)}%</div>
-        <div className="flex justify-center gap-4 text-zinc-500">
-            <button onClick={() => adjustBeatVol(-0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Minus size={18} /></button>
-            <button onClick={() => adjustBeatVol(0.05)} className="p-3 rounded-xl border border-zinc-800 hover:border-zinc-600 hover:text-white hover:bg-zinc-800 transition-all"><Plus size={18} /></button>
-        </div>
-     </div>
+  const BeatVolumeControl = () => (
+    <section className="control-group" aria-labelledby="beat-volume-label">
+      <div id="beat-volume-label" className="control-label">Beat vol</div>
+      <output className="control-value" aria-live="polite">{Math.round($beatVolume * 100)}%</output>
+      <div className="control-actions">
+        <button type="button" onClick={() => adjustBeatVolume(-0.05)} className={controlButton} aria-label="Decrease beat volume"><span aria-hidden="true">−</span></button>
+        <button type="button" onClick={() => adjustBeatVolume(0.05)} className={controlButton} aria-label="Increase beat volume"><span aria-hidden="true">+</span></button>
+      </div>
+    </section>
   );
 
   const PresetsControl = () => (
-     <div className="space-y-4 group flex flex-col items-center">
-        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest text-zinc-500">
-            <Save size={16} /> Presets
-        </div>
-        <div className="flex flex-wrap justify-center gap-3 px-2">
-            {[1, 2, 3, 4, 5].map(id => (
-                <button
-                    key={id}
-                    onClick={() => handlePresetClick(id)}
-                    className={`w-10 h-10 rounded-full border flex items-center justify-center text-lg font-light transition-all
-                        ${isSaveMode 
-                            ? 'border-red-500 text-red-500 animate-pulse bg-red-500/10' 
-                            : 'border-zinc-700 hover:border-zinc-400 hover:text-white text-zinc-500'
-                        }
-                    `}
-                >
-                    {id}
-                </button>
-            ))}
-        </div>
-        <div className="pt-2">
-                <button
-                onClick={() => setSaveMode(!isSaveMode)}
-                className={`text-[10px] uppercase tracking-widest px-4 py-2 rounded-full border transition-all
-                    ${isSaveMode 
-                        ? 'bg-red-500 text-white border-red-500' 
-                        : 'text-zinc-600 border-zinc-800 hover:border-zinc-600 hover:text-zinc-400'
-                    }
-                `}
-                >
-                {isSaveMode ? 'Cancel Save' : 'Save Current'}
-                </button>
-        </div>
-     </div>
-  );
-
-  const TimerControl = () => (
-    <div className="flex flex-col items-center justify-center h-full">
-         <div className="text-xs uppercase tracking-widest text-zinc-500 mb-4">Timer</div>
-         <button 
-            onClick={cycleTimer}
-            className="text-xs tracking-widest text-zinc-500 hover:text-white transition-colors uppercase px-6 py-3 border border-zinc-800 hover:border-zinc-500 rounded-lg hover:bg-zinc-800/50"
-        >
-            {$timer ? 'Adjust Timer' : 'Set Timer'}
-        </button>
-    </div>
-  );
-
-  const CloseControl = () => (
-      <div className="flex items-center justify-center h-full">
-         <button 
-            onClick={() => setShowControls(false)}
-            className="flex flex-col items-center justify-center gap-2 text-zinc-500 hover:text-white transition-colors group"
-         >
-              <div className="p-4 rounded-full border border-zinc-800 group-hover:bg-zinc-800 transition-colors">
-                 <X size={24} />
-              </div>
-              <span className="text-[10px] uppercase tracking-widest">Close</span>
-         </button>
+    <section className="control-group" aria-labelledby="presets-label">
+      <div id="presets-label" className="control-label">Presets</div>
+      <div className="preset-slots" aria-label="Preset slots">
+        {[1, 2, 3, 4, 5].map((id) => (
+          <button
+            type="button"
+            key={id}
+            onClick={() => handlePreset(id)}
+            className={`preset-button ${isSaveMode ? 'preset-button-save' : ''} ${activePreset === id ? 'preset-button-active' : ''}`}
+            aria-label={`${isSaveMode ? 'Save to' : 'Load'} preset ${id}${activePreset === id ? ', active' : ''}`}
+            aria-pressed={activePreset === id}
+          >
+            {id}
+          </button>
+        ))}
       </div>
+      <button
+        type="button"
+        onClick={() => setSaveMode((current) => !current)}
+        className={`save-mode-button ${isSaveMode ? 'save-mode-button-active' : ''}`}
+        aria-pressed={isSaveMode}
+      >
+        {isSaveMode ? 'Cancel save' : 'Save current'}
+      </button>
+    </section>
   );
 
   return (
-    <div className={`min-h-screen w-full flex flex-col items-center justify-center transition-colors duration-1000 ${$isPlaying ? 'bg-black text-slate-300' : 'bg-zinc-900 text-slate-400'}`}>
-      
-      {/* Zen Breathing Visual (Tap to Pause) */}
-      {$isPlaying && (
-        <motion.div 
-            className="absolute inset-0 flex items-center justify-center overflow-hidden cursor-pointer z-10"
-            onClick={() => togglePlay()}
-            whileTap={{ scale: 0.95 }}
-        >
-            <div className={`w-64 h-64 rounded-full bg-gradient-to-tr from-slate-800 to-transparent blur-3xl opacity-20 animate-breathe`} 
-                 style={{ animationDuration: `${60/$bpm * 4}s` }}
-            />
-        </motion.div>
+    <main className={`instrument ${$isPlaying ? 'instrument-playing' : 'instrument-paused'}`}>
+      {$isPlaying ? (
+        <button type="button" className="play-surface" onClick={() => void togglePlay()} aria-label="Pause audio">
+          <span className="breathing-orb" style={{ animationDuration: `${60 / $bpm * 4}s` }} aria-hidden="true" />
+          <span className="sr-only">Audio is playing. Activate to pause.</span>
+        </button>
+      ) : (
+        <button type="button" className="start-control" onClick={() => void togglePlay()} aria-label="Start audio">
+          <span className="start-title">FOCUS</span>
+          <span className="start-state">PAUSED · START</span>
+        </button>
       )}
 
-      {/* Main Status / Prompt - Now Clickable */}
-      {!$isPlaying && (
-        <div 
-            onClick={() => togglePlay()}
-            className="z-10 text-center space-y-4 animate-fade-in cursor-pointer p-12 rounded-full hover:bg-white/5 transition-colors"
-        >
-           <h1 className="text-4xl font-light tracking-[0.2em] text-white">FOCUS</h1>
-           <p className="text-sm tracking-widest text-zinc-500">TAP TO START</p>
-           <button 
-                onClick={(e) => { e.stopPropagation(); setShowHelp(true); }} 
-                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-           >
-             ? for guide
-           </button>
-        </div>
-      )}
-
-      {/* Timer Display - Clickable */}
       {$timer !== null && (
-         <button 
-            onClick={cycleTimer}
-            className="absolute top-8 font-mono text-sm tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors z-50"
-         >
-            {formatTime($timer)}
-         </button>
+        <button type="button" onClick={cycleTimer} className="timer-readout" aria-label={`${timerLabel}; change timer`}>
+          {formatTime($timer)}
+        </button>
       )}
 
-      {/* Settings Toggle (Visible when controls hidden) */}
       {!showControls && (
-          <button 
-            onClick={() => setShowControls(true)}
-            className="fixed bottom-12 right-12 z-50 p-6 text-zinc-500 hover:text-white transition-all rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 shadow-2xl group"
-            aria-label="Settings"
-          >
-              <Settings size={32} className="group-hover:rotate-90 transition-transform duration-500" />
-          </button>
+        <button type="button" onClick={() => setControlsVisible(true)} className="settings-toggle" aria-label="Show controls">
+          <span aria-hidden="true">≡</span>
+        </button>
       )}
 
-      {/* Controls Overlay (Full Screen Glass) */}
-      <AnimatePresence>
       {showControls && (
-        <div className={`
-            fixed inset-0 z-40 bg-black/80 backdrop-blur-3xl flex flex-col items-center justify-center
-        `}>
-            {/* Desktop Layout (Grid 6) */}
-            <div className="hidden md:flex w-full max-w-7xl flex-col items-center justify-center h-full relative p-12">
-                 <div className="grid grid-cols-6 gap-8 w-full items-start">
-                    <BpmControl />
-                    <NoiseColorControl />
-                    <NoiseVolControl />
-                    <BeatTypeControl />
-                    <BeatVolControl />
-                    <PresetsControl />
-                 </div>
-                 
-                 <div className="mt-20">
-                     <TimerControl />
-                 </div>
-
-                 {/* Desktop Close Button (Bottom Right) */}
-                 <button 
-                    onClick={() => setShowControls(false)}
-                    className="absolute bottom-12 right-12 p-6 text-zinc-500 hover:text-white transition-all rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 shadow-2xl"
-                 >
-                    <X size={32} />
-                 </button>
+        <section className="controls-overlay" aria-label="Audio controls">
+          <div className="controls-shell">
+            <div className="controls-topline">
+              <button type="button" onClick={() => setShowHelp(true)} className="quiet-button" aria-haspopup="dialog">Guide <span aria-hidden="true">?</span></button>
+              <button type="button" onClick={() => setControlsVisible(false)} className="quiet-icon-button" aria-label="Hide controls"><span aria-hidden="true">×</span></button>
             </div>
 
-            {/* Mobile Layout (Swipeable Pages) */}
-            <div className="md:hidden w-full h-full relative flex flex-col justify-center">
-                <div className="absolute top-8 left-0 right-0 text-center">
-                    <h2 className="text-xs font-bold tracking-widest text-zinc-600 uppercase">
-                        Studio {mobilePage + 1}/2
-                    </h2>
-                </div>
-
-                <div className="flex-1 flex items-center w-full overflow-hidden relative">
-                    {/* Navigation Arrows */}
-                    {mobilePage > 0 && (
-                        <button 
-                            onClick={() => setMobilePage(0)}
-                            className="absolute left-4 z-50 p-4 text-zinc-600 hover:text-white bg-black/20 rounded-full backdrop-blur-sm"
-                        >
-                            <ChevronLeft size={24} />
-                        </button>
-                    )}
-                    {mobilePage < 1 && (
-                        <button 
-                            onClick={() => setMobilePage(1)}
-                            className="absolute right-4 z-50 p-4 text-zinc-600 hover:text-white bg-black/20 rounded-full backdrop-blur-sm"
-                        >
-                            <ChevronRight size={24} />
-                        </button>
-                    )}
-
-                    <motion.div 
-                        className="w-full px-8"
-                        key={mobilePage}
-                        initial={{ x: mobilePage === 0 ? -300 : 300, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        exit={{ x: mobilePage === 0 ? 300 : -300, opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        drag="x"
-                        dragConstraints={{ left: 0, right: 0 }}
-                        dragElastic={0.2}
-                        onDragEnd={(_, { offset }) => {
-                            const swipe = offset.x;
-                            if (swipe < -50 && mobilePage === 0) setMobilePage(1);
-                            if (swipe > 50 && mobilePage === 1) setMobilePage(0);
-                        }}
-                    >
-                        {mobilePage === 0 ? (
-                            <div className="grid grid-cols-2 gap-y-12 gap-x-4">
-                                <NoiseColorControl />
-                                <NoiseVolControl />
-                                <BeatTypeControl />
-                                <BeatVolControl />
-                                <BpmControl />
-                                <CloseControl />
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 gap-y-12 gap-x-4 items-start">
-                                <PresetsControl />
-                                <TimerControl />
-                                <div></div> {/* Empty Spacer */}
-                                <CloseControl />
-                            </div>
-                        )}
-                    </motion.div>
-                </div>
+            <div className="controls-grid">
+              {BpmControl()}
+              {NoiseControl()}
+              {NoiseVolumeControl()}
+              {BeatControl()}
+              {BeatVolumeControl()}
+              {PresetsControl()}
             </div>
-        </div>
-      )}
-      </AnimatePresence>
 
-      {/* Toast Notification */}
-      {showToast && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
-             <div className="bg-zinc-800 text-zinc-200 px-6 py-3 rounded-full text-sm tracking-widest shadow-2xl animate-pulse border border-zinc-700">
-                {showToast}
-             </div>
-          </div>
-      )}
-
-      {/* Help Modal */}
-      {showHelp && (
-          <div className="absolute inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
-              <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-lg w-full rounded-sm shadow-2xl">
-                  <h2 className="text-xl font-light text-white mb-6 tracking-widest border-b border-zinc-800 pb-4">CONTROLS</h2>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm text-zinc-400">
-                      <div>SPACE</div><div className="text-right">Play / Pause</div>
-                      <div>J / K</div><div className="text-right">Prev / Next Noise</div>
-                      <div>H / L</div><div className="text-right">Noise Vol - / +</div>
-                      <div>U / I</div><div className="text-right">Prev / Next Beat</div>
-                      <div>Y / O</div><div className="text-right">Beat Vol - / +</div>
-                      <div>[ / ]</div><div className="text-right">BPM - / +</div>
-                      <div>0 - 9</div><div className="text-right">Load Preset</div>
-                      <div>Ctrl+0-9 / Toggle UI</div><div className="text-right">Save Preset</div>
-                      <div>T</div><div className="text-right">Cycle Timer</div>
-                      <div>ESC</div><div className="text-right">Zen Mode</div>
-                  </div>
-                  <button 
-                    onClick={() => setShowHelp(false)}
-                    className="w-full mt-8 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs tracking-widest transition-colors"
-                  >
-                      CLOSE
-                  </button>
+            <div className="session-row">
+              <button type="button" onClick={cycleTimer} className="timer-control" aria-label={`${timerLabel}; cycle timer duration`}>
+                <span className="control-label">Timer</span>
+                <span>{timerLabel}</span>
+              </button>
+              <div className="state-readout" aria-label="Current session state">
+                <span className={`state-dot ${$isPlaying ? 'state-dot-playing' : ''}`} aria-hidden="true" />
+                <span>{$isPlaying ? 'Playing' : 'Paused'}</span>
+                <span aria-hidden="true">·</span>
+                <span>{presetStatus}</span>
               </div>
+            </div>
+
+            <footer className="instrument-footer">
+              <span>Noise &amp; Beats</span>
+              <span aria-hidden="true">·</span>
+              <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
+              <span aria-hidden="true">·</span>
+              <a href={`${REPOSITORY_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer">MIT</a>
+              <span aria-hidden="true">·</span>
+              <span>presets stay local</span>
+            </footer>
           </div>
+        </section>
       )}
-    </div>
+
+      <div className="toast-region" role="status" aria-live="polite" aria-atomic="true">
+        {showToast && <span className="toast">{showToast}</span>}
+      </div>
+
+      <dialog
+        ref={dialogRef}
+        className="guide-dialog"
+        aria-labelledby="guide-title"
+        onCancel={(event) => {
+          event.preventDefault();
+          setShowHelp(false);
+        }}
+        onClose={() => setShowHelp(false)}
+      >
+        <div className="guide-heading">
+          <h2 id="guide-title">Noise &amp; Beats guide</h2>
+          <button ref={dialogCloseRef} type="button" onClick={() => setShowHelp(false)} className="quiet-icon-button" aria-label="Close guide"><span aria-hidden="true">×</span></button>
+        </div>
+
+        <p className="guide-copy">Generated in your browser for focused work or a steady background. Noise colors are filtered white-noise approximations, not calibrated acoustic spectra. Keep the volume comfortable; binaural mode is best heard with stereo headphones.</p>
+
+        <dl className="shortcut-list">
+          <div><dt>Space</dt><dd>Play / pause</dd></div>
+          <div><dt>J / K</dt><dd>Previous / next noise</dd></div>
+          <div><dt>H / L</dt><dd>Noise volume − / +</dd></div>
+          <div><dt>U / I</dt><dd>Previous / next beat</dd></div>
+          <div><dt>Y / O</dt><dd>Beat volume − / +</dd></div>
+          <div><dt>[ / ]</dt><dd>Tempo − / +</dd></div>
+          <div><dt>0–9</dt><dd>Load preset</dd></div>
+          <div><dt>Ctrl + 0–9</dt><dd>Save preset</dd></div>
+          <div><dt>T</dt><dd>Cycle timer</dd></div>
+          <div><dt>Esc</dt><dd>Show / hide controls</dd></div>
+          <div><dt>?</dt><dd>Open / close guide</dd></div>
+        </dl>
+
+        <div className="guide-note">
+          <p>No account, analytics, telemetry, or cloud sync. Presets use this browser's local storage and can disappear when site data is cleared.</p>
+          <p>Open source under the <a href={`${REPOSITORY_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer">MIT License</a>. Source and issues are on <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>.</p>
+        </div>
+      </dialog>
+    </main>
   );
 }

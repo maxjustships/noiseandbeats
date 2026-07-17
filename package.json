@@ -1,33 +1,52 @@
 {
-  "name": "noises-and-beats",
+  "name": "noiseandbeats",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A quiet, installable browser instrument for filtered noise colors and rhythmic beats.",
+  "license": "MIT",
+  "author": "Max",
+  "homepage": "https://noiseandbeats.pages.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maxjustships/noiseandbeats.git"
+  },
+  "bugs": {
+    "url": "https://github.com/maxjustships/noiseandbeats/issues"
+  },
+  "keywords": [
+    "web-audio",
+    "noise-generator",
+    "binaural-beats",
+    "focus",
+    "pwa"
+  ],
   "type": "module",
-  "version": "0.0.1",
+  "packageManager": "pnpm@10.30.2",
+  "engines": {
+    "node": ">=22 <23",
+    "pnpm": "10.30.2"
+  },
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
+    "check": "astro check",
+    "test": "node tests/run.mjs",
     "build": "astro build && node scripts/generate-sw.mjs",
     "preview": "astro preview",
+    "audit": "pnpm audit --audit-level=high",
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.6",
-    "@astrojs/react": "^4.2.0",
-    "@astrojs/tailwind": "^6.0.0",
-    "@nanostores/react": "^0.8.0",
-    "astro": "^5.0.0",
-    "framer-motion": "^12.23.26",
-    "lucide-react": "^0.474.0",
-    "nanostores": "^0.11.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwindcss": "^3.4.1",
-    "workbox-window": "^7.4.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "typescript": "^5.7.0",
-    "vite-plugin-pwa": "^1.2.0",
-    "workbox-build": "^7.4.0"
+    "@astrojs/check": "^0.9.9",
+    "@astrojs/react": "^6.0.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "astro": "^7.1.1",
+    "typescript": "^6.0.3",
+    "workbox-build": "^7.4.1"
   }
 }

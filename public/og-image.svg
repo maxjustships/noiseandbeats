@@ -1,6 +1,6 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
   <!-- Background -->
-  <rect width="1200" height="630" fill="#000000"/>
+  <rect width="1200" height="630" fill="#050506"/>
   
   <!-- Subtle Gradient Background glow -->
   <defs>
@@ -20,8 +20,8 @@
   <circle cx="600" cy="315" r="150" fill="url(#orb)" filter="blur(40px)" opacity="0.8" />
 
   <!-- Text -->
-  <text x="600" y="300" font-family="sans-serif" font-size="80" font-weight="300" fill="#cbd5e1" text-anchor="middle" letter-spacing="0.1em">NOISES &amp; BEATS</text>
+  <text x="600" y="300" font-family="sans-serif" font-size="80" font-weight="300" fill="#cbd5e1" text-anchor="middle" letter-spacing="0.1em">NOISE &amp; BEATS</text>
   
-  <text x="600" y="360" font-family="sans-serif" font-size="24" font-weight="400" fill="#71717a" text-anchor="middle" letter-spacing="0.3em" text-transform="uppercase">Focus . Productivity . Zen</text>
+  <text x="600" y="360" font-family="sans-serif" font-size="24" font-weight="400" fill="#a1a1aa" text-anchor="middle" letter-spacing="0.3em">BROWSER AUDIO INSTRUMENT</text>
 
 </svg>

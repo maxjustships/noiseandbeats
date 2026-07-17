@@ -8,6 +8,7 @@ export class AudioEngine {
   private noiseFilter: BiquadFilterNode | null = null;
   
   private masterGain: GainNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
 
   // Scheduler
   private nextNoteTime: number = 0;
@@ -25,8 +26,17 @@ export class AudioEngine {
       this.ctx = new AudioContextClass();
       
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = 1.0;
-      this.masterGain.connect(this.ctx.destination);
+      this.masterGain.gain.value = 0.8;
+
+      this.limiter = this.ctx.createDynamicsCompressor();
+      this.limiter.threshold.value = -6;
+      this.limiter.knee.value = 0;
+      this.limiter.ratio.value = 20;
+      this.limiter.attack.value = 0.003;
+      this.limiter.release.value = 0.25;
+
+      this.masterGain.connect(this.limiter);
+      this.limiter.connect(this.ctx.destination);
 
       // Subscribe to stores
       noiseVolume.subscribe(() => {
@@ -169,6 +179,7 @@ export class AudioEngine {
   // --- Scheduler & Beats ---
   private startScheduler() {
     if (!this.ctx) return;
+    this.stopScheduler();
     this.nextNoteTime = this.ctx.currentTime + 0.1;
     this.timerID = window.setInterval(() => this.scheduler(), this.lookahead);
   }
@@ -261,7 +272,7 @@ export class AudioEngine {
       gain.gain.linearRampToValueAtTime(0.1 * bVol, time + 0.5);
 
       oscL.start(time);
-      oscR.start(time + 0.6); 
+      oscR.start(time);
       
       oscL.stop(time + 0.5);
       oscR.stop(time + 0.5);

@@ -10,7 +10,8 @@ export interface Preset {
   beatVolume: number;
 }
 
-const STORAGE_KEY = 'noises_beats_presets';
+const STORAGE_KEY = 'noiseandbeats_presets';
+const LEGACY_STORAGE_KEY = 'noises_beats_presets';
 
 export function savePreset(id: number): boolean {
   try {
@@ -56,8 +57,15 @@ export function loadPreset(id: number): boolean {
 
 function getPresets(): Record<number, Preset> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const current = localStorage.getItem(STORAGE_KEY);
+    if (current) return JSON.parse(current);
+
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacy) return {};
+
+    const presets = JSON.parse(legacy);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+    return presets;
   } catch {
     return {};
   }

@@ -1,15 +1,11 @@
 import { generateSW } from 'workbox-build';
 
-generateSW({
+const result = await generateSW({
   globDirectory: 'dist/',
-  globPatterns: [
-    '**/*.{html,json,js,css,svg,png,ico,txt,webmanifest}'
-  ],
+  globPatterns: ['**/*.{html,json,js,css,svg,png,ico,txt,webmanifest}'],
   swDest: 'dist/sw.js',
-  ignoreURLParametersMatching: [
-    /^utm_/,
-    /^fbclid$/
-  ],
+  inlineWorkboxRuntime: true,
+  ignoreURLParametersMatching: [/^utm_/, /^fbclid$/],
   clientsClaim: true,
   skipWaiting: true,
   cleanupOutdatedCaches: true,
@@ -20,14 +16,16 @@ generateSW({
       handler: 'NetworkFirst',
       options: {
         cacheName: 'documents',
-        expiration: {
-          maxEntries: 10,
-        },
+        networkTimeoutSeconds: 4,
+        expiration: { maxEntries: 10 },
       },
-    }
-  ]
-}).then(({ count, size }) => {
-  console.log(`Generated sw.js, which will precache ${count} files, totaling ${size} bytes.`);
-}).catch((err) => {
-  console.error(`Unable to generate a new service worker.`, err);
+    },
+  ],
 });
+
+if (result.count === 0) {
+  throw new Error('Service worker generation produced an empty precache.');
+}
+
+for (const warning of result.warnings) console.warn(warning);
+console.log(`Generated one service worker with ${result.count} precached files (${result.size} bytes).`);

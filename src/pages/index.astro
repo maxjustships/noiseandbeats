@@ -2,64 +2,58 @@
 import ZenPlayer from '../components/ZenPlayer';
 import '../styles/global.css';
 
-const siteUrl = "https://noisesandbeats.com";
+const siteUrl = new URL('https://noiseandbeats.pages.dev/');
+const title = 'Noise & Beats | Minimal Focus Audio';
+const description = 'Generate filtered noise colors and rhythmic beats in your browser for focused work. Keyboard-friendly, installable, private, and free of telemetry.';
 const schema = JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "WebApplication",
-  "name": "Noises & Beats",
-  "url": siteUrl,
-  "description": "A minimalist audio tool for productivity and focus. Generate brown noise, pink noise, and binaural beats directly in your browser.",
-  "applicationCategory": "Productivity",
-  "operatingSystem": "Any",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  }
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Noise & Beats',
+  url: siteUrl.href,
+  description,
+  applicationCategory: 'ProductivityApplication',
+  operatingSystem: 'Any',
+  isAccessibleForFree: true,
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
 });
 ---
 
+<!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-        <link rel="manifest" href="/manifest.webmanifest" />
-        <link rel="canonical" href={siteUrl} />
-        
-        <title>Noises & Beats | Minimalist Focus Audio</title>
-        <meta name="description" content="A minimalist audio tool for productivity and focus. Generate brown noise, pink noise, and binaural beats directly in your browser. Keyboard driven, no ads, no distractions." />
-        <meta name="keywords" content="brown noise, pink noise, white noise, binaural beats, focus, productivity, zen, minimalism, audio generator, study music" />
-        
-        <!-- Open Graph / Facebook -->
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={siteUrl} />
-        <meta property="og:title" content="Noises & Beats | Minimalist Focus Audio" />
-        <meta property="og:description" content="Generate brown noise, pink noise, and binaural beats for deep work and focus." />
-        <meta property="og:image" content={`${siteUrl}/og-image.svg`} />
-        
-        <!-- Twitter -->
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={siteUrl} />
-        <meta property="twitter:title" content="Noises & Beats | Minimalist Focus Audio" />
-        <meta property="twitter:description" content="Generate brown noise, pink noise, and binaural beats for deep work and focus." />
-        <meta property="twitter:image" content={`${siteUrl}/og-image.svg`} />
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#050506" />
 
-        <meta name="theme-color" content="#000000" />
-        
-        <!-- Structured Data -->
-        <script type="application/ld+json" set:html={schema} />
-        
-        <script>
-            import { registerSW } from 'virtual:pwa-register';
-            
-            registerSW({
-                immediate: true,
-            });
-        </script>
-	</head>
-	<body class="bg-black overflow-hidden">
-		<ZenPlayer client:load />
-	</body>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="canonical" href={siteUrl.href} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={siteUrl.href} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL('og-image.svg', siteUrl).href} />
+    <meta property="og:image:alt" content="Noise & Beats focus audio instrument" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL('og-image.svg', siteUrl).href} />
+
+    <script is:inline type="application/ld+json" set:html={schema} />
+    <script is:inline src="/register-sw.js" defer></script>
+  </head>
+  <body>
+    <ZenPlayer client:load />
+  </body>
 </html>
